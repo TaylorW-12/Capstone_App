@@ -24,7 +24,7 @@ nfl_logos = {
     "KC":  "https://a.espncdn.com/i/teamlogos/nfl/500/kc.png",
     "LV":  "https://a.espncdn.com/i/teamlogos/nfl/500/lv.png",
     "LAC": "https://a.espncdn.com/i/teamlogos/nfl/500/lac.png",
-    "LAR": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png",
+    "LA": "https://a.espncdn.com/i/teamlogos/nfl/500/lar.png",
     "MIA": "https://a.espncdn.com/i/teamlogos/nfl/500/mia.png",
     "MIN": "https://a.espncdn.com/i/teamlogos/nfl/500/min.png",
     "NE":  "https://a.espncdn.com/i/teamlogos/nfl/500/ne.png",
