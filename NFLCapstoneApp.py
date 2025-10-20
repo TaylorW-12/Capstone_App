@@ -682,7 +682,7 @@ def main():
     
     teams = sorted(filtered_teams)
     selected_team = st.sidebar.selectbox(
-        "🏈 Select Team",
+        "Select Team",
         options=['All'] + teams,
         key='team_select'
     )
@@ -699,7 +699,7 @@ def main():
     
     players = sorted(filtered_df['player_display_name'].unique())
     selected_player = st.sidebar.selectbox(
-        "👤 Select Player",
+        "Select Player",
         options=['All'] + players,
         key='player_select'
     )
@@ -708,27 +708,27 @@ def main():
     
     # Metric Selection
     st.sidebar.divider()
-    st.sidebar.subheader("📊 Select Metrics (Max 3)")
+    st.sidebar.subheader("Select Metrics (Max 3)")
     
     # Organize metrics by category with expanders
     selected_metrics = []
     
-    with st.sidebar.expander("🎯 Passing Stats"):
+    with st.sidebar.expander("Passing Stats"):
         available_pass = [stat for stat in pass_stats if stat in df.columns]
         pass_selected = st.multiselect("Select passing metrics:", available_pass, key='pass_metrics')
         selected_metrics.extend(pass_selected)
     
-    with st.sidebar.expander("🏃 Rushing Stats"):
+    with st.sidebar.expander("Rushing Stats"):
         available_rush = [stat for stat in rush_stats if stat in df.columns]
         rush_selected = st.multiselect("Select rushing metrics:", available_rush, key='rush_metrics')
         selected_metrics.extend(rush_selected)
     
-    with st.sidebar.expander("🤲 Receiving Stats"):
+    with st.sidebar.expander("Receiving Stats"):
         available_rec = [stat for stat in rec_stats if stat in df.columns]
         rec_selected = st.multiselect("Select receiving metrics:", available_rec, key='rec_metrics')
         selected_metrics.extend(rec_selected)
     
-    with st.sidebar.expander("📐 Player Performance Ratios"):
+    with st.sidebar.expander("Player Performance Ratios"):
         available_ratios = [stat for stat in performance_ratios if stat in df.columns]
         
         # Show descriptions in a nice format
@@ -752,7 +752,7 @@ def main():
     
     # Enforce max 3 metrics
     if len(selected_metrics) > 3:
-        st.sidebar.error("⚠️ Please select a maximum of 3 metrics")
+        st.sidebar.error("Please select a maximum of 3 metrics")
         selected_metrics = selected_metrics[:3]
     
     st.sidebar.info(f"**Selected: {len(selected_metrics)}/3 metrics**")
@@ -784,10 +784,10 @@ def main():
         st.metric("Unique Teams", result_df['team'].nunique())
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Data View", "✈️ Travel Impact Analysis", "🔬 Flag Impact Analysis", "💡 Team/Player Insights"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Data View", "Travel Impact Analysis", "Flag Impact Analysis", "Team/Player Insights"])
     
     with tab1:
-        st.subheader("📊 Team Performance Summary")
+        st.subheader("Team Performance Summary")
         
         # Check if we need aggregated view (default) or filtered view
         show_aggregated = (selected_season == 'All' and selected_team == 'All' and selected_player == 'All')
@@ -924,11 +924,11 @@ def main():
         use_team_avg = (comparison_type == 'Team\'s Own Average')
         
         if selected_season == 'All':
-            st.warning("⚠️ Please select a specific season to analyze travel impact")
+            st.warning("Please select a specific season to analyze travel impact")
         elif selected_team == 'All' and selected_player == 'All':
-            st.warning("⚠️ Please select a specific team or player to analyze travel impact")
+            st.warning("Please select a specific team or player to analyze travel impact")
         elif not selected_metrics:
-            st.warning("⚠️ Please select at least one metric to analyze")
+            st.warning("Please select at least one metric to analyze")
         else:
             # Determine entity type and name
             if selected_player != 'All':
@@ -977,7 +977,7 @@ def main():
                 st.divider()
                 
                 # Add correlation heatmap at the top
-                st.subheader("🔥 Correlation Analysis")
+                st.subheader("Correlation Analysis")
                 st.write("This heatmap shows how strongly each metric correlates with travel distance and with each other.")
                 
                 fig_corr, corr_matrix = create_correlation_heatmap(entity_df, selected_metrics)
@@ -1010,10 +1010,10 @@ def main():
                 
                 # Create visualizations for each metric
                 for metric in selected_metrics:
-                    st.subheader(f"📈 {metric.replace('_', ' ').title()}")
+                    st.subheader(f"{metric.replace('_', ' ').title()}")
                     
                     # Create tabs for different views
-                    tab_a, tab_b, tab_c = st.tabs(["📊 Distance Impact", "📈 Season Trend", "🔍 Scatter Plot"])
+                    tab_a, tab_b, tab_c = st.tabs(["Distance Impact", "Season Trend", "Scatter Plot"])
                     
                     with tab_a:
                         # Binned chart
@@ -1037,9 +1037,9 @@ def main():
                         if abs(corr) > 0.3:
                             direction = "increases" if corr > 0 else "decreases"
                             strength = "strong" if abs(corr) > 0.6 else "moderate"
-                            st.info(f"📊 **{strength.title()} correlation detected:** {metric.replace('_', ' ').title()} {direction} by approximately **{abs(corr)*100:.1f}%** correlation as travel distance increases")
+                            st.info(f"**{strength.title()} correlation detected:** {metric.replace('_', ' ').title()} {direction} by approximately **{abs(corr)*100:.1f}%** correlation as travel distance increases")
                         else:
-                            st.info(f"📊 **Weak correlation:** Travel distance has minimal impact on {metric.replace('_', ' ').title()}")
+                            st.info(f"**Weak correlation:** Travel distance has minimal impact on {metric.replace('_', ' ').title()}")
                     
                     st.divider()
             else:
@@ -1073,9 +1073,9 @@ def main():
             )
         
         if not selected_metrics:
-            st.warning("⚠️ Please select at least one metric from the sidebar to analyze")
+            st.warning("Please select at least one metric from the sidebar to analyze")
         elif selected_flag not in result_df.columns:
-            st.warning(f"⚠️ Flag '{selected_flag_name}' not found in dataset")
+            st.warning(f"Flag '{selected_flag_name}' not found in dataset")
         else:
             st.info(f"**Analyzing impact of {selected_flag_name} on selected metrics**")
             
@@ -1109,7 +1109,7 @@ def main():
                     st.divider()
                     
                     # Visualization
-                    st.subheader("📊 Visual Comparison")
+                    st.subheader("Visual Comparison")
                     
                     fig = go.Figure()
                     
@@ -1138,7 +1138,7 @@ def main():
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Data table
-                    st.subheader("📋 Detailed Results")
+                    st.subheader("Detailed Results")
                     display_impact = impact_results.copy()
                     display_impact['metric'] = display_impact['metric'].str.replace('_', ' ').str.title()
                     display_impact = display_impact.round(2)
@@ -1148,7 +1148,7 @@ def main():
                     st.warning("No results to display. Check your data and selected metrics.")
             
             else:  # Random Forest Model
-                st.subheader("🤖 Random Forest Feature Importance")
+                st.subheader("Random Forest Feature Importance")
                 st.write("This model identifies which metrics are most predictive of the selected flag condition.")
                 
                 # Get all available metrics for RF model (not just selected ones)
@@ -1217,7 +1217,7 @@ def main():
                         st.markdown("🟢 **Green bars**: Your selected metrics")
                     
                     if selected_not_in_top20:
-                        st.info(f"📍 **Note:** {len(selected_not_in_top20)} of your selected metrics are outside the top 20 and shown below")
+                        st.info(f"**Note:** {len(selected_not_in_top20)} of your selected metrics are outside the top 20 and shown below")
                     
                     fig = go.Figure(go.Bar(
                         x=display_importances['importance'],
@@ -1241,7 +1241,7 @@ def main():
                     st.plotly_chart(fig, use_container_width=True)
                     
                     # Show rankings for selected metrics
-                    st.subheader("📍 Your Selected Metrics Rankings")
+                    st.subheader("Your Selected Metrics Rankings")
                     cols_rank = st.columns(min(len(selected_metrics), 3))
                     
                     for idx, metric in enumerate(selected_metrics):
@@ -1268,13 +1268,13 @@ def main():
                     # Interpretation
                     st.divider()
                     top_metric = importances.iloc[0]
-                    st.success(f"💡 **Key Insight:** `{top_metric['metric'].replace('_', ' ').title()}` is the #1 most important metric "
+                    st.success(f"**Key Insight:** `{top_metric['metric'].replace('_', ' ').title()}` is the #1 most important metric "
                             f"for predicting {selected_flag_name} (importance: {top_metric['importance']:.4f})")
                     
                     # Show if any selected metrics are highly predictive
                     highly_predictive_selected = [m for m in selected_metrics if m in importances.head(5)['metric'].values]
                     if highly_predictive_selected:
-                        st.success(f"🎯 **Your selection includes top predictors:** {', '.join([m.replace('_', ' ').title() for m in highly_predictive_selected])}")
+                        st.success(f"**Your selection includes top predictors:** {', '.join([m.replace('_', ' ').title() for m in highly_predictive_selected])}")
                     
                     # Detailed table with highlighting
                     st.subheader("📋 Complete Feature Importance Table")
@@ -1306,7 +1306,7 @@ def main():
                     st.error("Unable to train model. Check your data and selected metrics.")
                 
     with tab4:
-        st.subheader("💡 Team/Player Performance Insights")
+        st.subheader("Team/Player Performance Insights")
         st.write("Analyze how away games, Thursday games, international games, and extended away trips impact performance metrics.")
         
         # Entity selection
@@ -1322,14 +1322,14 @@ def main():
         with col2:
             if insight_entity == 'Team':
                 if selected_team == 'All':
-                    st.info("👆 Select a team from the sidebar")
+                    st.info("Select a team from the sidebar")
                     entity_selected = None
                 else:
                     entity_selected = selected_team
                     st.success(f"**{selected_team}**")
             else:
                 if selected_player == 'All':
-                    st.info("👆 Select a player from the sidebar")
+                    st.info("Select a player from the sidebar")
                     entity_selected = None
                 else:
                     entity_selected = selected_player
@@ -1350,7 +1350,7 @@ def main():
                 flag_correlations, available_flags, available_metrics = corr_result
                 
                 # Display correlation heatmap
-                st.subheader("🔥 Flag Impact Correlation Matrix")
+                st.subheader("Flag Impact Correlation Matrix")
                 st.write("Shows how strongly each flag condition correlates with performance metrics. "
                         "Red = negative impact, Blue = positive impact.")
                 
@@ -1379,14 +1379,14 @@ def main():
                 st.divider()
                 
                 # Key insights section
-                st.subheader("🎯 Key Insights")
+                st.subheader("Key Insights")
                 
                 # Find strongest correlations for each flag
                 for flag in available_flags:
                     flag_display = flag.replace('_', ' ').title()
                     correlations = flag_correlations[flag].abs().sort_values(ascending=False).head(5)
                     
-                    with st.expander(f"📍 {flag_display} - Top 5 Impacted Metrics"):
+                    with st.expander(f"{flag_display} - Top 5 Impacted Metrics"):
                         for idx, (metric, corr_val) in enumerate(correlations.items(), 1):
                             actual_corr = flag_correlations.loc[metric, flag]
                             direction = "📈 Positive" if actual_corr > 0 else "📉 Negative"
@@ -1403,7 +1403,7 @@ def main():
                 st.divider()
                 
                 # Metric-specific comparison
-                st.subheader("📊 Detailed Metric Analysis")
+                st.subheader("Detailed Metric Analysis")
                 st.write("Compare how a specific metric performs under different game conditions.")
                 
                 # Metric selector
@@ -1476,7 +1476,7 @@ def main():
                         st.plotly_chart(fig_comparison, use_container_width=True)
                         
                         # Summary insights
-                        st.subheader("💬 Summary")
+                        st.subheader("Summary")
                         
                         worst_impact = comparison_df.loc[comparison_df['pct_change'].idxmin()]
                         best_impact = comparison_df.loc[comparison_df['pct_change'].idxmax()]
@@ -1492,7 +1492,7 @@ def main():
                 st.divider()
                 
                 # Team scatter plot analysis
-                st.subheader("🎯 Team Performance Scatter Analysis")
+                st.subheader("Team Performance Scatter Analysis")
                 st.write("Compare all teams' completion percentage vs attempts across different game conditions.")
                 
                 # Filter selection for scatter
@@ -1633,14 +1633,14 @@ def main():
                         col_perf1, col_perf2 = st.columns(2)
                         
                         with col_perf1:
-                            st.write("**🏆 Top 5 Completion %**")
+                            st.write("**Top 5 Completion %**")
                             top_5 = team_stats.nlargest(5, 'completion_pct')[['team', 'completion_pct', 'attempts']]
                             top_5_display = top_5.copy()
                             top_5_display.columns = ['Team', 'Comp %', 'Attempts']
                             st.dataframe(top_5_display, hide_index=True, use_container_width=True)
                         
                         with col_perf2:
-                            st.write("**📉 Bottom 5 Completion %**")
+                            st.write("**Bottom 5 Completion %**")
                             bottom_5 = team_stats.nsmallest(5, 'completion_pct')[['team', 'completion_pct', 'attempts']]
                             bottom_5_display = bottom_5.copy()
                             bottom_5_display.columns = ['Team', 'Comp %', 'Attempts']
@@ -1653,7 +1653,7 @@ def main():
             else:
                 st.warning("Insufficient data for correlation analysis. Try selecting a different season or entity.")
         else:
-            st.info("👆 Select a team or player from the sidebar to view performance insights")
+            st.info("Select a team or player from the sidebar to view performance insights")
     
 if __name__ == "__main__":
     main()
