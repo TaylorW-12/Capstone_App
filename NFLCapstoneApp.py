@@ -668,7 +668,7 @@ def main():
     # Season filter (always available)
     seasons = sorted(df['season'].unique())
     selected_season = st.sidebar.selectbox(
-        "📅 Select Season",
+        "Select Season",
         options=['All'] + seasons,
         key='season_select'
     )
@@ -888,7 +888,7 @@ def main():
                 st.dataframe(result_df[display_cols], use_container_width=True, height=400)
     
     with tab2:
-        st.subheader("✈️ Travel Distance Impact on Performance")
+        st.subheader("Travel Distance Impact on Performance")
         
         # Add home/away filter
         col_filter1, col_filter2, col_filter3 = st.columns(3)
@@ -1046,7 +1046,7 @@ def main():
                 st.error("Unable to calculate travel impact. Please check your data.")
     
     with tab3:
-        st.subheader("🔬 Model Analysis")
+        st.subheader("Model Analysis")
         st.write("Analyze which metrics are most affected by away games, Thursday games, extended away games, and international games.")
         
         # Flag selection
