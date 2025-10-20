@@ -655,7 +655,7 @@ def main():
     df = load_data()
      
     # SIDEBAR FILTERS
-    st.sidebar.title("🔍 Filters")
+    st.sidebar.title("Filters")
 
     # Initialize session state for filters
     if 'selected_season' not in st.session_state:
