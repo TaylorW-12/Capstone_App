@@ -784,7 +784,7 @@ def main():
         st.metric("Unique Teams", result_df['team'].nunique())
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["Data View", "Travel Impact Analysis", "Flag Impact Analysis", "Team/Player Insights"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Data View", "Travel Impact Analysis", "Variable Reduction Analysis (Model)", "Team/Player Insights"])
     
     with tab1:
         st.subheader("Team Performance Summary")
