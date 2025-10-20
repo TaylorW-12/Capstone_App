@@ -705,6 +705,7 @@ def main():
         key='player_select'
     )
     st.session_state.selected_player = selected_player
+    st.sidebar.info(f"**Active Filters:**\n\n Season: `{selected_season}`\n\n Team: `{selected_team}`\n\n Player: `{selected_player}`")
     
     # Metric Selection
     st.sidebar.divider()
@@ -758,8 +759,7 @@ def main():
     st.sidebar.info(f"**Selected: {len(selected_metrics)}/3 metrics**")
     
     st.sidebar.divider()
-    st.sidebar.info(f"**Active Filters:**\n\n Season: `{selected_season}`\n\n Team: `{selected_team}`\n\n Player: `{selected_player}`")
-    
+   
     # Apply all filters to show final results
     result_df = df.copy()
     
