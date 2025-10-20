@@ -1,11 +1,13 @@
-
-
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import accuracy_score, f1_score
+    
 
 # Page configuration
 st.image("same_color.png", width=40000)
@@ -267,9 +269,6 @@ def train_rf_model(df, metrics, target_flag):
     Train Random Forest model to predict impact of flag on selected metrics
     target_flag: 'isaway', 'is_thursday', 'intl', or 'extended_away_games'
     """
-    from sklearn.ensemble import RandomForestClassifier
-    from sklearn.model_selection import train_test_split
-    from sklearn.metrics import accuracy_score, f1_score
     
     # Prepare data
     model_df = df.copy()
