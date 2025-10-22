@@ -12,6 +12,8 @@ from sklearn.metrics import accuracy_score, f1_score
 # Page configuration
 st.image("same_color.png", width=40000)
 
+
+
 # Custom CSS
 st.markdown("""
 <style>
@@ -263,11 +265,13 @@ def load_data():
     
     return df
 
+
+
 @st.cache_data
 def train_rf_model(df, metrics, target_flag):
     """
     Train Random Forest model to predict impact of flag on selected metrics
-    target_flag: 'isaway', 'is_thursday', 'intl', or 'extended_away_games'
+    target_flag: 'isaway', 'is_thursday', 'is_international', or 'extended_away_games'
     """
     
     # Prepare data
@@ -329,7 +333,7 @@ def create_flag_correlation_matrix(df, entity_type, entity_name, season):
         return None
     
     # Select flags and performance metrics
-    flags = ['isaway', 'is_thursday', 'intl', 'extended_away_games']
+    flags = ['isaway', 'is_thursday', 'is_international', 'extended_away_games']
     
     # Performance metrics from your data
     performance_metrics = [
@@ -380,7 +384,7 @@ def create_flag_impact_comparison(df, entity_type, entity_name, season, metric):
     if len(filtered_df) == 0 or metric not in filtered_df.columns:
         return None
     
-    flags = ['isaway', 'is_thursday', 'intl', 'extended_away_games']
+    flags = ['isaway', 'is_thursday', 'is_international', 'extended_away_games']
     results = []
     
     for flag in flags:
@@ -557,7 +561,7 @@ def create_flag_impact_comparison(df, entity_type, entity_name, season, metric):
     if len(filtered_df) == 0 or metric not in filtered_df.columns:
         return None
     
-    flags = ['isaway', 'is_thursday', 'intl', 'extended_away_games']
+    flags = ['isaway', 'is_thursday', 'is_international', 'extended_away_games']
     results = []
     
     for flag in flags:
@@ -795,21 +799,24 @@ def main():
         if show_aggregated:
             st.write("**Aggregated team statistics across all seasons**")
             
-            # Create aggregated dataframe - one row per team
+           # Create aggregated dataframe - one row per team
             team_agg = df.groupby('team').agg({
-                'is_thursday': 'sum',  # Total Thursday games
-                'intl': 'sum',  # Total international games
-                'isaway': 'sum',  # Total away games
-                'travel_distance': 'mean',  # Average travel distance
-                'season': 'nunique'  # Number of seasons for averaging
+            'game_id': 'nunique',  # Total unique games played
+            'season': 'nunique'  # Number of seasons for averaging
             }).reset_index()
-            
+
+            # Count unique games for each category
+            team_agg['Total Thursday Games'] = df[df['is_thursday'] == 1].groupby('team')['game_id'].nunique().reindex(team_agg['team'], fill_value=0).values
+            team_agg['Total International Games'] = df[df['is_international'] == 1].groupby('team')['game_id'].nunique().reindex(team_agg['team'], fill_value=0).values
+            team_agg['Total Away Games'] = df[df['isaway'] == 1].groupby('team')['game_id'].nunique().reindex(team_agg['team'], fill_value=0).values
+
+            # Calculate average travel distance (this one is fine to use mean on all rows)
+            team_agg['Avg Travel Distance'] = df.groupby('team')['travel_distance'].mean().reindex(team_agg['team']).round(0).values
+
             # Calculate averages per season
-            team_agg['Avg Thursday Games/Season'] = (team_agg['is_thursday'] / team_agg['season']).round(2)
-            team_agg['Avg Intl Games/Season'] = (team_agg['intl'] / team_agg['season']).round(2)
-            team_agg['Avg Away Games/Season'] = (team_agg['isaway'] / team_agg['season']).round(2)
-            team_agg['Avg Travel Distance'] = team_agg['travel_distance'].round(0)
-            
+            team_agg['Avg Thursday Games/Season'] = (team_agg['Total Thursday Games'] / team_agg['season']).round(2)
+            team_agg['Avg International Games/Season'] = (team_agg['Total International Games'] / team_agg['season']).round(2)
+            team_agg['Avg Away Games/Season'] = (team_agg['Total Away Games'] / team_agg['season']).round(2)
             # Add logo URLs
             team_agg['Logo'] = team_agg['team'].map(nfl_logos)
             
@@ -817,7 +824,7 @@ def main():
             display_df = team_agg[[
                 'Logo', 'team', 
                 'Avg Thursday Games/Season', 
-                'Avg Intl Games/Season', 
+                'Avg International Games/Season', 
                 'Avg Away Games/Season',
                 'Avg Travel Distance'
             ]].copy()
@@ -839,8 +846,8 @@ def main():
                         "Avg Thursday Games/Season", 
                         format="%.2f"
                     ),
-                    "Avg Intl Games/Season": st.column_config.NumberColumn(
-                        "Avg Intl Games/Season", 
+                    "Avg International Games/Season": st.column_config.NumberColumn(
+                        "Avg International Games/Season", 
                         format="%.2f"
                     ),
                     "Avg Away Games/Season": st.column_config.NumberColumn(
@@ -863,7 +870,7 @@ def main():
             with col2:
                 st.metric("Avg Thursday Games", f"{display_df['Avg Thursday Games/Season'].mean():.2f}")
             with col3:
-                st.metric("Avg Intl Games", f"{display_df['Avg Intl Games/Season'].mean():.2f}")
+                st.metric("Avg International Games", f"{display_df['Avg International Games/Season'].mean():.2f}")
             with col4:
                 st.metric("Avg Travel Distance", f"{display_df['Avg Travel Distance'].mean():,.0f} mi")
         
@@ -873,7 +880,7 @@ def main():
             if selected_metrics:
                 display_cols = ['season', 'team', 'player_display_name'] + selected_metrics
                 # Add additional columns
-                additional_cols = ['attempts', 'is_thursday', 'intl', 'travel_distance']
+                additional_cols = ['attempts', 'is_thursday', 'is_international', 'travel_distance']
                 for col in additional_cols:
                     if col in result_df.columns and col not in display_cols:
                         display_cols.append(col)
@@ -883,7 +890,7 @@ def main():
             else:
                 # Show default columns when no metrics selected
                 default_cols = ['season', 'team', 'player_display_name', 
-                               'attempts', 'is_thursday', 'intl', 'travel_distance']
+                               'attempts', 'is_thursday', 'is_international', 'travel_distance']
                 display_cols = [col for col in default_cols if col in result_df.columns]
                 st.dataframe(result_df[display_cols], use_container_width=True, height=400)
     
@@ -1056,7 +1063,7 @@ def main():
                 'Away Games': 'isaway',
                 'Thursday Games': 'is_thursday',
                 'Extended Away Games': 'extended_away_games',
-                'International Games': 'intl'
+                'International Games': 'is_international'
             }
             selected_flag_name = st.selectbox(
                 "Select Flag to Analyze:",
@@ -1155,12 +1162,12 @@ def main():
                 all_numeric_cols = result_df.select_dtypes(include=[np.number]).columns.tolist()
                 # Remove non-feature columns
                 exclude_cols = ['season', 'week', 'away_score', 'home_score', 'result', 'total', 
-                            'isaway', 'is_thursday', 'extended_away_games', 'intl', 'is_international',
+                            'isaway', 'is_thursday', 'extended_away_games', 'is_international', 'is_international',
                             'overtime', 'div_game', 'lead_changes', 'gsis', 'old_game_id', 'jersey_number',
                             'season_type', 'opponent_team', 'depth_chart_position', 'football_name', 
                             'recent_team', 'status', 'status_description_abbr', 'game_type', 'player_name', 
                             'position', 'game_id', 'gameday', 'weekday', 'location', 'stadium', 
-                            'away_rest', 'home_rest', 'week_after_intl', 'defensive_snaps', 
+                            'away_rest', 'home_rest', 'week_after_is_international', 'defensive_snaps', 
                             'team_defensive_snaps', 'special_team_snaps', 'team_special_team_snaps',
                             'sack_fumbles_lost', 'passing_first_downs', 'passing_2pt_conversions',
                             'rushing_first_downs', 'rushing_fumbles_lost', 'receiving_fumbles_lost', 
@@ -1507,7 +1514,7 @@ def main():
                     'All Games': None,
                     'Away Games': 'isaway',
                     'Thursday Games': 'is_thursday',
-                    'International Games': 'intl',
+                    'International Games': 'is_international',
                     'Extended Away Games': 'extended_away_games'
                 }
                 
