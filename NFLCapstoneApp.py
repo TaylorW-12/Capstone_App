@@ -788,7 +788,7 @@ def main():
         st.metric("Unique Teams", result_df['team'].nunique())
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs(["Data View", "Travel Impact Analysis", "Variable Reduction Analysis (Model)", "Team/Player Insights"])
+    tab1, tab3, tab4 = st.tabs(["Data View", "Variable Reduction Analysis (Model)", "Team/Player Insights"])
     
     with tab1:
         st.subheader("Team Performance Summary")
@@ -800,9 +800,10 @@ def main():
             st.write("**Aggregated team statistics across all seasons**")
             
            # Create aggregated dataframe - one row per team
+         # Create aggregated dataframe - one row per team
             team_agg = df.groupby('team').agg({
-            'game_id': 'nunique',  # Total unique games played
-            'season': 'nunique'  # Number of seasons for averaging
+                'game_id': 'nunique',  # Total unique games played
+                'season': 'nunique'  # Number of seasons
             }).reset_index()
 
             # Count unique games for each category
@@ -810,22 +811,18 @@ def main():
             team_agg['Total International Games'] = df[df['is_international'] == 1].groupby('team')['game_id'].nunique().reindex(team_agg['team'], fill_value=0).values
             team_agg['Total Away Games'] = df[df['isaway'] == 1].groupby('team')['game_id'].nunique().reindex(team_agg['team'], fill_value=0).values
 
-            # Calculate average travel distance (this one is fine to use mean on all rows)
-            team_agg['Avg Travel Distance'] = df.groupby('team')['travel_distance'].mean().reindex(team_agg['team']).round(0).values
+            # Calculate average travel distance (rounded up)
+            team_agg['Avg Travel Distance'] = np.ceil(df.groupby('team')['travel_distance'].mean().reindex(team_agg['team']).values)
 
-            # Calculate averages per season
-            team_agg['Avg Thursday Games/Season'] = (team_agg['Total Thursday Games'] / team_agg['season']).round(2)
-            team_agg['Avg International Games/Season'] = (team_agg['Total International Games'] / team_agg['season']).round(2)
-            team_agg['Avg Away Games/Season'] = (team_agg['Total Away Games'] / team_agg['season']).round(2)
             # Add logo URLs
             team_agg['Logo'] = team_agg['team'].map(nfl_logos)
             
             # Select and rename columns for display
             display_df = team_agg[[
                 'Logo', 'team', 
-                'Avg Thursday Games/Season', 
-                'Avg International Games/Season', 
-                'Avg Away Games/Season',
+                'Total Thursday Games', 
+                'Total International Games', 
+                'Total Away Games',
                 'Avg Travel Distance'
             ]].copy()
             
@@ -842,16 +839,16 @@ def main():
                 column_config={
                     "Logo": st.column_config.ImageColumn("", width="small"),
                     "Team": st.column_config.TextColumn("Team", width="small"),
-                    "Avg Thursday Games/Season": st.column_config.NumberColumn(
-                        "Avg Thursday Games/Season", 
+                    "Total Thursday Games": st.column_config.NumberColumn(
+                        "Avg Thursday Games", 
                         format="%.2f"
                     ),
-                    "Avg International Games/Season": st.column_config.NumberColumn(
-                        "Avg International Games/Season", 
+                    "Total International Games": st.column_config.NumberColumn(
+                        "Total International Games", 
                         format="%.2f"
                     ),
-                    "Avg Away Games/Season": st.column_config.NumberColumn(
-                        "Avg Away Games/Season", 
+                    "Total Away Games": st.column_config.NumberColumn(
+                        "Total Away Games", 
                         format="%.2f"
                     ),
                     "Avg Travel Distance": st.column_config.NumberColumn(
@@ -868,9 +865,9 @@ def main():
             with col1:
                 st.metric("Total Teams", len(display_df))
             with col2:
-                st.metric("Avg Thursday Games", f"{display_df['Avg Thursday Games/Season'].mean():.2f}")
+                st.metric("Total Thursday Games", f"{display_df['Total Thursday Games'].mean():.2f}")
             with col3:
-                st.metric("Avg International Games", f"{display_df['Avg International Games/Season'].mean():.2f}")
+                st.metric("Total International Games", f"{display_df['Total International Games'].mean():.2f}")
             with col4:
                 st.metric("Avg Travel Distance", f"{display_df['Avg Travel Distance'].mean():,.0f} mi")
         
@@ -893,164 +890,6 @@ def main():
                                'attempts', 'is_thursday', 'is_international', 'travel_distance']
                 display_cols = [col for col in default_cols if col in result_df.columns]
                 st.dataframe(result_df[display_cols], use_container_width=True, height=400)
-    
-    with tab2:
-        st.subheader("Travel Distance Impact on Performance")
-        
-        # Add home/away filter
-        col_filter1, col_filter2, col_filter3 = st.columns(3)
-        with col_filter1:
-            home_away_filter = st.selectbox(
-                "Game Location:",
-                options=['Both', 'Away Games Only'],
-                key='home_away_filter'
-            )
-        
-        with col_filter2:
-            comparison_type = st.selectbox(
-                "Compare To:",
-                options=['Season Average', 'Team\'s Own Average'],
-                key='comparison_type'
-            )
-        
-        with col_filter3:
-            ma_window = st.slider(
-                "Moving Avg Window:",
-                min_value=2,
-                max_value=10,
-                value=3,
-                key='ma_window'
-            )
-        
-        # Map selection to parameter
-        home_away_map = {
-            'Both': 'both',
-            'Away Games Only': 'away'
-        }
-        home_away_param = home_away_map[home_away_filter]
-        use_team_avg = (comparison_type == 'Team\'s Own Average')
-        
-        if selected_season == 'All':
-            st.warning("Please select a specific season to analyze travel impact")
-        elif selected_team == 'All' and selected_player == 'All':
-            st.warning("Please select a specific team or player to analyze travel impact")
-        elif not selected_metrics:
-            st.warning("Please select at least one metric to analyze")
-        else:
-            # Determine entity type and name
-            if selected_player != 'All':
-                entity_type = 'player'
-                entity_name = selected_player
-                entity_display = f"Player: {selected_player}"
-            else:
-                entity_type = 'team'
-                entity_name = selected_team
-                entity_display = f"Team: {selected_team}"
-            
-            st.info(f"**Analysis for {entity_display} in {selected_season} season ({home_away_filter})**")
-            
-            # Calculate travel impact
-            impact_df, entity_df, avg_distance = calculate_travel_impact(
-                df, selected_season, entity_type, entity_name, selected_metrics, home_away_param, use_team_avg
-            )
-            
-            if impact_df is not None and entity_df is not None:
-                # Show average travel distance based on filter
-                season_df_temp = df[df['season'] == selected_season].copy()
-                
-                if use_team_avg:
-                    # Use the avg_distance from the function (team's own average)
-                    comparison_distance = avg_distance
-                    comparison_label = f"{entity_display}'s Avg"
-                else:
-                    # Calculate season average
-                    if home_away_param == 'both' or home_away_param == 'away':
-                        comparison_distance = season_df_temp['travel_distance'].mean()
-                    comparison_label = "Season Avg"
-                
-                avg_entity_distance = entity_df['travel_distance'].mean()
-                
-                distance_label = "Travel Distance"
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric(f"{comparison_label} {distance_label}", f"{comparison_distance:.0f} miles")
-                with col2:
-                    st.metric(f"{entity_display} Avg", f"{avg_entity_distance:.0f} miles")
-                with col3:
-                    diff = avg_entity_distance - comparison_distance
-                    st.metric("Difference", f"{diff:+.0f} miles")
-                
-                st.divider()
-                
-                # Add correlation heatmap at the top
-                st.subheader("Correlation Analysis")
-                st.write("This heatmap shows how strongly each metric correlates with travel distance and with each other.")
-                
-                fig_corr, corr_matrix = create_correlation_heatmap(entity_df, selected_metrics)
-                st.plotly_chart(fig_corr, use_container_width=True)
-                
-                # Display key correlations
-                st.write("**Key Insights:**")
-                cols_insight = st.columns(len(selected_metrics))
-                for idx, metric in enumerate(selected_metrics):
-                    if metric in corr_matrix.index:
-                        corr_with_miles = corr_matrix.loc[metric, 'miles_over_avg']
-                        with cols_insight[idx]:
-                            if abs(corr_with_miles) > 0.5:
-                                strength = "Strong"
-                                color = "🔴" if corr_with_miles < 0 else "🟢"
-                            elif abs(corr_with_miles) > 0.3:
-                                strength = "Moderate"
-                                color = "🟠"
-                            else:
-                                strength = "Weak"
-                                color = "⚪"
-                            
-                            st.metric(
-                                label=metric.replace('_', ' ').title(),
-                                value=f"{corr_with_miles:.2f}",
-                                delta=f"{color} {strength}"
-                            )
-                
-                st.divider()
-                
-                # Create visualizations for each metric
-                for metric in selected_metrics:
-                    st.subheader(f"{metric.replace('_', ' ').title()}")
-                    
-                    # Create tabs for different views
-                    tab_a, tab_b, tab_c = st.tabs(["Distance Impact", "Season Trend", "Scatter Plot"])
-                    
-                    with tab_a:
-                        # Binned chart
-                        fig1 = create_travel_impact_chart(impact_df, metric)
-                        st.plotly_chart(fig1, use_container_width=True)
-                    
-                    with tab_b:
-                        # Moving average chart
-                        fig_ma = create_moving_average_chart(entity_df, metric, ma_window)
-                        st.plotly_chart(fig_ma, use_container_width=True)
-                    
-                    with tab_c:
-                        # Scatter plot with trendline
-                        fig2 = create_scatter_plot(entity_df, metric)
-                        st.plotly_chart(fig2, use_container_width=True)
-                    
-                    # Calculate correlation
-                    if metric in entity_df.columns and 'miles_over_avg' in entity_df.columns:
-                        corr = entity_df[[metric, 'miles_over_avg']].corr().iloc[0, 1]
-                        
-                        if abs(corr) > 0.3:
-                            direction = "increases" if corr > 0 else "decreases"
-                            strength = "strong" if abs(corr) > 0.6 else "moderate"
-                            st.info(f"**{strength.title()} correlation detected:** {metric.replace('_', ' ').title()} {direction} by approximately **{abs(corr)*100:.1f}%** correlation as travel distance increases")
-                        else:
-                            st.info(f"**Weak correlation:** Travel distance has minimal impact on {metric.replace('_', ' ').title()}")
-                    
-                    st.divider()
-            else:
-                st.error("Unable to calculate travel impact. Please check your data.")
     
     with tab3:
         st.subheader("Model Analysis")
