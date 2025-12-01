@@ -81,6 +81,42 @@ POSITION_GROUPS = {
     }
 }
 
+# NFL stadium coordinates
+nfl_stadium_coords = {
+    "ARI": {"lat": 33.5276, "lon": -112.2626, "stadium": "State Farm Stadium"},
+    "ATL": {"lat": 33.7555, "lon": -84.4008, "stadium": "Mercedes-Benz Stadium"},
+    "BAL": {"lat": 39.2780, "lon": -76.6227, "stadium": "M&T Bank Stadium"},
+    "BUF": {"lat": 42.7738, "lon": -78.7870, "stadium": "Highmark Stadium"},
+    "CAR": {"lat": 35.2258, "lon": -80.8528, "stadium": "Bank of America Stadium"},
+    "CHI": {"lat": 41.8623, "lon": -87.6167, "stadium": "Soldier Field"},
+    "CIN": {"lat": 39.0954, "lon": -84.5160, "stadium": "Paycor Stadium"},
+    "CLE": {"lat": 41.5061, "lon": -81.6995, "stadium": "Cleveland Browns Stadium"},
+    "DAL": {"lat": 32.7473, "lon": -97.0945, "stadium": "AT&T Stadium"},
+    "DEN": {"lat": 39.7439, "lon": -105.0201, "stadium": "Empower Field at Mile High"},
+    "DET": {"lat": 42.3400, "lon": -83.0456, "stadium": "Ford Field"},
+    "GB": {"lat": 44.5013, "lon": -88.0622, "stadium": "Lambeau Field"},
+    "HOU": {"lat": 29.6847, "lon": -95.4107, "stadium": "NRG Stadium"},
+    "IND": {"lat": 39.7601, "lon": -86.1639, "stadium": "Lucas Oil Stadium"},
+    "JAX": {"lat": 30.3239, "lon": -81.6373, "stadium": "EverBank Stadium"},
+    "KC": {"lat": 39.0489, "lon": -94.4839, "stadium": "GEHA Field at Arrowhead Stadium"},
+    "LV": {"lat": 36.0908, "lon": -115.1833, "stadium": "Allegiant Stadium"},
+    "LAC": {"lat": 33.9534, "lon": -118.3390, "stadium": "SoFi Stadium"},
+    "LA": {"lat": 33.9534, "lon": -118.3390, "stadium": "SoFi Stadium"},
+    "LAR": {"lat": 33.9534, "lon": -118.3390, "stadium": "SoFi Stadium"},
+    "MIA": {"lat": 25.9580, "lon": -80.2389, "stadium": "Hard Rock Stadium"},
+    "MIN": {"lat": 44.9738, "lon": -93.2575, "stadium": "U.S. Bank Stadium"},
+    "NE": {"lat": 42.0909, "lon": -71.2643, "stadium": "Gillette Stadium"},
+    "NO": {"lat": 29.9511, "lon": -90.0812, "stadium": "Caesars Superdome"},
+    "NYG": {"lat": 40.8128, "lon": -74.0742, "stadium": "MetLife Stadium"},
+    "NYJ": {"lat": 40.8128, "lon": -74.0742, "stadium": "MetLife Stadium"},
+    "PHI": {"lat": 39.9008, "lon": -75.1675, "stadium": "Lincoln Financial Field"},
+    "PIT": {"lat": 40.4468, "lon": -80.0158, "stadium": "Acrisure Stadium"},
+    "SF": {"lat": 37.4032, "lon": -121.9696, "stadium": "Levi's Stadium"},
+    "SEA": {"lat": 47.5952, "lon": -122.3316, "stadium": "Lumen Field"},
+    "TB": {"lat": 27.9759, "lon": -82.5033, "stadium": "Raymond James Stadium"},
+    "TEN": {"lat": 36.1665, "lon": -86.7713, "stadium": "Nissan Stadium"},
+    "WAS": {"lat": 38.9076, "lon": -77.0169, "stadium": "FedExField"}
+}
 # Descriptions for performance ratios
 performance_ratio_descriptions = {
     'snap_share': 'Player On-Field % (offensive_snaps / team_offensive_snaps)',
@@ -150,6 +186,160 @@ nfl_logos = {
     "TEN": "https://a.espncdn.com/i/teamlogos/nfl/500/ten.png",
     "WAS": "https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png"
 }
+
+def create_team_travel_map(df, selected_season, selected_team):
+    """Create interactive travel map for a team's season"""
+    
+    # Convert team full name to abbreviation if needed
+    team_abbr = selected_team
+    for abbr, full_name in nfl_team_names.items():
+        if full_name == selected_team:
+            team_abbr = abbr
+            break
+    
+    # Filter data for the selected team and season
+    team_data = df[
+        (df['season'] == selected_season) & 
+        (df['team'] == team_abbr)
+    ].sort_values('week').copy()
+    
+    if len(team_data) == 0:
+        return None
+    
+    # Get unique weeks and assign colors
+    weeks_filtered = sorted(team_data['week'].unique())
+    colors = px.colors.qualitative.Plotly + px.colors.qualitative.D3 + px.colors.qualitative.G10
+    color_map = {week: colors[i % len(colors)] for i, week in enumerate(weeks_filtered)}
+    
+    # Create map figure
+    fig = go.Figure()
+    
+    prev_lat, prev_lon = None, None
+    route_counter = 0
+    
+    for week in weeks_filtered:
+        week_data = team_data[team_data['week'] == week].iloc[0]
+        
+        # Get coordinates for this week's game
+        if 'opponent_team' in week_data and pd.notna(week_data['opponent_team']):
+            opponent = week_data['opponent_team']
+        else:
+            opponent = team_abbr
+        
+        # Determine location based on isaway flag
+        if 'isaway' in week_data and week_data['isaway'] == 1:
+            # Away game - use opponent's stadium
+            game_team = opponent if opponent in nfl_stadium_coords else team_abbr
+        else:
+            # Home game - use team's stadium
+            game_team = team_abbr
+        
+        if game_team not in nfl_stadium_coords:
+            continue
+            
+        lat = nfl_stadium_coords[game_team]['lat']
+        lon = nfl_stadium_coords[game_team]['lon']
+        stadium = nfl_stadium_coords[game_team]['stadium']
+        
+        # Create travel line if there's a previous location
+        if prev_lat is not None and prev_lon is not None:
+            fig.add_trace(go.Scattergeo(
+                locationmode="USA-states",
+                lon=[prev_lon, lon],
+                lat=[prev_lat, lat],
+                mode="lines",
+                line=dict(width=3, color=color_map[week]),
+                name=f"Week {week}",
+                showlegend=True,
+                hoverinfo="skip"
+            ))
+            route_counter += 1
+        
+        # Determine marker properties
+        marker_color = color_map[week]
+        marker_size = 10
+        marker_symbol = "circle"
+        
+        # Special markers for special game conditions
+        if 'is_thursday' in week_data and week_data['is_thursday'] == 1:
+            marker_symbol = "star"
+            marker_size = 14
+            marker_color = "gold"
+        elif 'is_international' in week_data and week_data['is_international'] == 1:
+            marker_symbol = "diamond"
+            marker_size = 14
+            marker_color = "purple"
+        
+        # Build hover text
+        hover_text = f"<b>Week {week}</b><br>Stadium: {stadium}<br>"
+        
+        if 'isaway' in week_data:
+            location_type = "Away" if week_data['isaway'] == 1 else "Home"
+            hover_text += f"Location: {location_type}<br>"
+        
+        if 'travel_distance' in week_data and pd.notna(week_data['travel_distance']) and week_data['travel_distance'] > 0:
+            hover_text += f"Travel Distance: {week_data['travel_distance']:.0f} miles<br>"
+        
+        if 'is_thursday' in week_data and week_data['is_thursday'] == 1:
+            hover_text += "<b>⭐ Thursday Game</b><br>"
+        
+        if 'is_international' in week_data and week_data['is_international'] == 1:
+            hover_text += "<b>◆ International Game</b><br>"
+        
+        # Add marker
+        fig.add_trace(go.Scattergeo(
+            locationmode="USA-states",
+            lon=[lon],
+            lat=[lat],
+            mode="markers",
+            marker=dict(
+                size=marker_size,
+                symbol=marker_symbol,
+                color=marker_color,
+                line=dict(width=1, color='white')
+            ),
+            hoverinfo="text",
+            text=hover_text,
+            showlegend=False
+        ))
+        
+        prev_lat, prev_lon = lat, lon
+    
+    # Update map layout
+    fig.update_layout(
+        title=dict(
+            text=f"{selected_team} - {selected_season} Season Travel Map",
+            font=dict(size=16),
+            x=0.5,
+            xanchor="center"
+        ),
+        geo=dict(
+            scope="usa",
+            projection_type="albers usa",
+            showland=True,
+            landcolor="rgb(229, 229, 229)",
+            coastlinecolor="rgb(204, 204, 204)",
+            showlakes=True,
+            lakecolor="rgb(255, 255, 255)",
+            subunitcolor="rgb(217, 217, 217)",
+            bgcolor="rgb(243, 243, 243)"
+        ),
+        height=500,
+        margin={"r": 120, "t": 50, "l": 0, "b": 0},
+        legend=dict(
+            title=dict(text="<b>Weeks</b>", font=dict(size=10)),
+            bgcolor="rgba(255,255,255,0.8)",
+            bordercolor="gray",
+            borderwidth=1,
+            font=dict(size=9),
+            x=1.02,
+            y=0.5,
+            xanchor="left",
+            yanchor="middle"
+        )
+    )
+    
+    return fig
 
 def format_metric_name(metric):
     """Convert metric names from snake_case to Title Case"""
@@ -626,6 +816,64 @@ def main():
                 default_cols = ['week','season', 'team', 'player_display_name', 'position_group', 'is_thursday', 'is_international', 'travel_distance']
                 display_cols = [col for col in default_cols if col in result_df.columns]
                 st.dataframe(result_df[display_cols], use_container_width=True, height=400)
+        
+        # Travel Map Section - Show when specific team and season are selected
+        if selected_team != 'All' and selected_season != 'All':
+            st.divider()
+            st.subheader("Team Travel Map")
+            st.write("Visualize the team's travel throughout the season. Special markers indicate Thursday games (⭐ gold) and international games (◆ purple).")
+            
+            travel_fig = create_team_travel_map(df, selected_season, selected_team)
+            
+            if travel_fig is not None:
+                st.plotly_chart(travel_fig, use_container_width=True)
+                
+                # Add travel statistics
+                col_t1, col_t2, col_t3, col_t4 = st.columns(4)
+                
+                # Get team abbreviation
+                team_abbr = selected_team
+                for abbr, full_name in nfl_team_names.items():
+                    if full_name == selected_team:
+                        team_abbr = abbr
+                        break
+                
+                season_data = df[
+                    (df['season'] == selected_season) & 
+                    (df['team'] == team_abbr)
+                ]
+                
+                if len(season_data) > 0 and 'travel_distance' in season_data.columns:
+                    total_distance = season_data['travel_distance'].sum()
+                    avg_distance = season_data[season_data['travel_distance'] > 0]['travel_distance'].mean()
+                    max_distance = season_data['travel_distance'].max()
+                    away_games = season_data['isaway'].sum() if 'isaway' in season_data.columns else 0
+                    
+                    with col_t1:
+                        st.metric("Total Distance", f"{total_distance:,.0f} mi")
+                    with col_t2:
+                        st.metric("Avg Trip Distance", f"{avg_distance:,.0f} mi" if pd.notna(avg_distance) else "N/A")
+                    with col_t3:
+                        st.metric("Longest Trip", f"{max_distance:,.0f} mi" if pd.notna(max_distance) else "N/A")
+                    with col_t4:
+                        st.metric("Away Games", f"{away_games:.0f}")
+                    
+                    # Additional insights
+                    if 'is_thursday' in season_data.columns:
+                        thursday_games = season_data['is_thursday'].sum()
+                        if thursday_games > 0:
+                            st.info(f"⭐ **{thursday_games:.0f} Thursday game(s)** this season")
+                    
+                    if 'is_international' in season_data.columns:
+                        intl_games = season_data['is_international'].sum()
+                        if intl_games > 0:
+                            st.info(f"◆ **{intl_games:.0f} international game(s)** this season")
+            else:
+                st.info("No travel data available for the selected team and season.")
+        elif selected_team != 'All' and selected_season == 'All':
+            st.info("**Tip:** Select a specific season to view the team's travel map")
+        elif selected_team == 'All':
+            st.info("**Tip:** Select a specific team and season to view the travel map")            
     
     with tab2:
         st.subheader("Model Analysis")
@@ -1029,7 +1277,8 @@ def main():
                             st.error(f"**Biggest Negative Impact:** {worst_impact['flag']} ({worst_impact['pct_change']:.1f}% decrease)")
                         with col_sum2:
                             st.success(f"**Best Performance:** {best_impact['flag']} ({best_impact['pct_change']:.1f}% change)")
-                
+             
+  
                 st.divider()
                 
                 # Team scatter plot
@@ -1138,6 +1387,7 @@ def main():
                 st.warning("Insufficient data for correlation analysis. Try selecting a different season or entity.")
         else:
             st.info("Select a team or position group from the sidebar to view performance insights")
+        
 
 if __name__ == "__main__":
     main()
