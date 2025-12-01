@@ -39,27 +39,47 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Define metric categories
-pass_stats = ["attempts", "completions", "passing_yards", "passing_tds", "interceptions",
-              "sacks", "sack_yards", "sack_fumbles", "sack_fumbles_lost",
-              "passing_air_yards", "passing_yards_after_catch",
-              "passing_first_downs", "passing_2pt_conversions"]
-
-rush_stats = ["carries", "rushing_yards", "rushing_tds",
-              "rushing_fumbles", "rushing_fumbles_lost", "rushing_first_downs"]
-
-rec_stats = ['receptions', 'targets', 'receiving_yards', 'receiving_tds', 'receiving_fumbles',
-             'receiving_fumbles_lost', 'receiving_air_yards', 'receiving_yards_after_catch', 
-             'receiving_first_downs', 'receiving_2pt_conversions', 'racr', 'target_share', 
-             'air_yards_share', 'wopr']
-
-performance_ratios = [
-    'snap_share', 'pass_usage', 'pass_pct_of_offense', 'pass_air_yard_pct',
-    'pass_yards_after_catch_pct', 'pass_average_air_yards', 'rusher_usage',
-    'rusher_fumble_pct', 'rusher_yards_per_carry', 'receiver_usage',
-    'receiver_efficiency', 'receiver_yac_pct', 'receiver_yards_per_reception',
-    'receiver_yac_to_air_yards'
-]
+# Define position groups and their relevant metrics
+POSITION_GROUPS = {
+    'QB': {
+        'name': 'Quarterbacks',
+        'stats': ["attempts", "completions", "passing_yards", "passing_tds", "interceptions",
+                  "sacks", "sack_yards", "sack_fumbles", "sack_fumbles_lost",
+                  "passing_air_yards", "passing_yards_after_catch",
+                  "passing_first_downs", "passing_2pt_conversions"],
+        'ratios': ['snap_share', 'pass_usage', 'pass_pct_of_offense', 'pass_air_yard_pct',
+                   'pass_yards_after_catch_pct', 'pass_average_air_yards']
+    },
+    'RB': {
+        'name': 'Running Backs',
+        'stats': ["carries", "rushing_yards", "rushing_tds", "rushing_fumbles", 
+                  "rushing_fumbles_lost", "rushing_first_downs",
+                  'receptions', 'targets', 'receiving_yards', 'receiving_tds', 
+                  'receiving_air_yards', 'receiving_yards_after_catch', 
+                  'receiving_first_downs', 'target_share', 'air_yards_share'],
+        'ratios': ['snap_share', 'rusher_usage', 'rusher_fumble_pct', 'rusher_yards_per_carry',
+                   'receiver_usage', 'receiver_efficiency', 'receiver_yac_pct', 
+                   'receiver_yards_per_reception']
+    },
+    'WR': {
+        'name': 'Wide Receivers',
+        'stats': ['receptions', 'targets', 'receiving_yards', 'receiving_tds', 'receiving_fumbles',
+                  'receiving_fumbles_lost', 'receiving_air_yards', 'receiving_yards_after_catch', 
+                  'receiving_first_downs', 'receiving_2pt_conversions', 'racr', 'target_share', 
+                  'air_yards_share', 'wopr'],
+        'ratios': ['snap_share', 'receiver_usage', 'receiver_efficiency', 'receiver_yac_pct', 
+                   'receiver_yards_per_reception', 'receiver_yac_to_air_yards']
+    },
+    'TE': {
+        'name': 'Tight Ends',
+        'stats': ['receptions', 'targets', 'receiving_yards', 'receiving_tds', 'receiving_fumbles',
+                  'receiving_fumbles_lost', 'receiving_air_yards', 'receiving_yards_after_catch', 
+                  'receiving_first_downs', 'receiving_2pt_conversions', 'racr', 'target_share', 
+                  'air_yards_share', 'wopr'],
+        'ratios': ['snap_share', 'receiver_usage', 'receiver_efficiency', 'receiver_yac_pct', 
+                   'receiver_yards_per_reception', 'receiver_yac_to_air_yards']
+    }
+}
 
 # Descriptions for performance ratios
 performance_ratio_descriptions = {
@@ -131,6 +151,36 @@ nfl_logos = {
     "WAS": "https://a.espncdn.com/i/teamlogos/nfl/500/wsh.png"
 }
 
+def format_metric_name(metric):
+    """Convert metric names from snake_case to Title Case"""
+    return metric.replace('_', ' ').title()
+
+def get_position_group(position):
+    """Map a position to its position group"""
+    if pd.isna(position):
+        return None
+    position = str(position).upper()
+    if position in ['QB']:
+        return 'QB'
+    elif position in ['RB', 'FB', 'HB']:
+        return 'RB'
+    elif position in ['WR']:
+        return 'WR'
+    elif position in ['TE']:
+        return 'TE'
+    return None
+
+def get_position_metrics(position_group, df):
+    """Get available metrics for a position group"""
+    if position_group not in POSITION_GROUPS:
+        return [], []
+    
+    config = POSITION_GROUPS[position_group]
+    available_stats = [s for s in config['stats'] if s in df.columns]
+    available_ratios = [r for r in config['ratios'] if r in df.columns]
+    
+    return available_stats, available_ratios
+
 @st.cache_data
 def load_data():
     df = pd.read_csv("df_merged.csv")
@@ -138,6 +188,10 @@ def load_data():
     
     if 'travel_distance_away' in df.columns:
         df['travel_distance'] = df['travel_distance_away']
+    
+    # Map positions to position groups
+    if 'position' in df.columns:
+        df['position_group'] = df['position'].apply(get_position_group)
     
     # Calculate performance ratios
     if 'snap_share' not in df.columns and 'offensive_snaps' in df.columns and 'team_offensive_snaps' in df.columns:
@@ -150,6 +204,8 @@ def load_data():
         df['pass_air_yard_pct'] = df['passing_air_yards'] / df['passing_yards']
     if 'pass_yards_after_catch_pct' not in df.columns and 'passing_yards_after_catch' in df.columns and 'passing_yards' in df.columns:
         df['pass_yards_after_catch_pct'] = df['passing_yards_after_catch'] / df['passing_yards']
+    if 'pass_average_air_yards' not in df.columns and 'passing_air_yards' in df.columns and 'attempts' in df.columns:
+        df['pass_average_air_yards'] = df['passing_air_yards'] / df['attempts']
     if 'rusher_usage' not in df.columns and 'carries' in df.columns and 'offensive_snaps' in df.columns:
         df['rusher_usage'] = df['carries'] / df['offensive_snaps']
     if 'rusher_fumble_pct' not in df.columns and 'rushing_fumbles' in df.columns and 'carries' in df.columns:
@@ -177,8 +233,12 @@ def calculate_flag_impact(df, metrics, flag):
         if metric not in df.columns or flag not in df.columns:
             continue
         
-        flag_1 = df[df[flag] == 1][metric].mean()
-        flag_0 = df[df[flag] == 0][metric].mean()
+        metric_data = df[df[metric].notna()]
+        if len(metric_data) == 0:
+            continue
+        
+        flag_1 = metric_data[metric_data[flag] == 1][metric].mean()
+        flag_0 = metric_data[metric_data[flag] == 0][metric].mean()
         
         if pd.notna(flag_1) and pd.notna(flag_0):
             difference = flag_1 - flag_0
@@ -202,7 +262,14 @@ def train_rf_model(df, metrics, target_flag):
     if len(model_df) == 0:
         return None, None, None
     
-    available_metrics = [m for m in metrics if m in model_df.columns]
+    # Filter to only include metrics that have data
+    available_metrics = []
+    for m in metrics:
+        if m in model_df.columns:
+            non_na_count = model_df[m].notna().sum()
+            if non_na_count > 10:
+                available_metrics.append(m)
+    
     if not available_metrics:
         return None, None, None
     
@@ -238,37 +305,70 @@ def create_flag_correlation_matrix(df, entity_type, entity_name, season):
     if season != 'All':
         filtered_df = filtered_df[filtered_df['season'] == season]
     
-    entity_col = 'team' if entity_type == 'team' else 'player_display_name'
-    filtered_df = filtered_df[filtered_df[entity_col] == entity_name]
+    # Handle both team and position group filtering
+    if entity_type == 'team':
+        # Convert full team name to abbreviation if needed
+        team_abbr = None
+        for abbr, full_name in nfl_team_names.items():
+            if full_name == entity_name:
+                team_abbr = abbr
+                break
+        if team_abbr:
+            filtered_df = filtered_df[filtered_df['team'] == team_abbr]
+        else:
+            filtered_df = filtered_df[filtered_df['team'] == entity_name]
+    else:  # position_group
+        filtered_df = filtered_df[filtered_df['position_group'] == entity_name]
     
     if len(filtered_df) == 0:
         return None
     
     flags = ['isaway', 'is_thursday', 'is_international']
-    performance_metrics = [
-        'attempts', 'completions', 'passing_yards', 'passing_tds', 'interceptions',
-        'sacks', 'sack_yards', 'carries', 'rushing_yards', 'rushing_tds',
-        'receptions', 'targets', 'receiving_yards', 'receiving_tds',
-        'passing_air_yards', 'passing_yards_after_catch', 'receiving_air_yards',
-        'receiving_yards_after_catch', 'racr', 'target_share', 'air_yards_share', 'wopr',
-        'offensive_snaps', 'lead_changes', 'travel_distance'
-    ]
     
-    if 'snap_share' in filtered_df.columns:
-        performance_metrics.append('snap_share')
-    if 'receiver_efficiency' in filtered_df.columns:
-        performance_metrics.append('receiver_efficiency')
+    # Get metrics based on entity type
+    if entity_type == 'position_group':
+        stats, ratios = get_position_metrics(entity_name, filtered_df)
+        performance_metrics = stats + ratios + ['offensive_snaps', 'lead_changes', 'travel_distance']
+    else:
+        # For teams, use all available metrics
+        performance_metrics = [
+            'attempts', 'completions', 'passing_yards', 'passing_tds', 'interceptions',
+            'sacks', 'sack_yards', 'carries', 'rushing_yards', 'rushing_tds',
+            'receptions', 'targets', 'receiving_yards', 'receiving_tds',
+            'passing_air_yards', 'passing_yards_after_catch', 'receiving_air_yards',
+            'receiving_yards_after_catch', 'racr', 'target_share', 'air_yards_share', 'wopr',
+            'offensive_snaps', 'lead_changes', 'travel_distance'
+        ]
     
     available_flags = [f for f in flags if f in filtered_df.columns]
-    available_metrics = [m for m in performance_metrics if m in filtered_df.columns]
+    
+    # Filter to only include metrics that have sufficient non-null data
+    available_metrics = []
+    for m in performance_metrics:
+        if m in filtered_df.columns:
+            non_null_count = filtered_df[m].notna().sum()
+            if non_null_count > 10:
+                available_metrics.append(m)
     
     if not available_flags or not available_metrics:
         return None
     
     corr_cols = available_flags + available_metrics
     corr_data = filtered_df[corr_cols].copy()
+    
+    # Calculate correlation and drop any metrics that result in all NaN correlations
     corr_matrix = corr_data.corr()
     flag_correlations = corr_matrix.loc[available_metrics, available_flags]
+    
+    # Remove rows that have all NaN values
+    flag_correlations = flag_correlations.dropna(how='all')
+    flag_correlations = flag_correlations.dropna(how='any')
+    
+    if len(flag_correlations) == 0:
+        return None
+    
+    # Update available_metrics to only include those that remain
+    available_metrics = list(flag_correlations.index)
     
     return flag_correlations, available_flags, available_metrics
 
@@ -278,19 +378,19 @@ def create_flag_impact_comparison(df, entity_type, entity_name, season, metric):
     if season != 'All':
         filtered_df = filtered_df[filtered_df['season'] == season]
     
+    # Handle both team and position group filtering
     if entity_type == 'team':
         team_abbr = None
         for abbr, full_name in nfl_team_names.items():
             if full_name == entity_name:
                 team_abbr = abbr
                 break
-        
         if team_abbr:
             filtered_df = filtered_df[filtered_df['team'] == team_abbr]
         else:
             filtered_df = filtered_df[filtered_df['team'] == entity_name]
-    else:
-        filtered_df = filtered_df[filtered_df['player_display_name'] == entity_name]
+    else:  # position_group
+        filtered_df = filtered_df[filtered_df['position_group'] == entity_name]
     
     if len(filtered_df) == 0 or metric not in filtered_df.columns:
         return None
@@ -300,8 +400,9 @@ def create_flag_impact_comparison(df, entity_type, entity_name, season, metric):
     
     for flag in flags:
         if flag in filtered_df.columns:
-            flag_1 = filtered_df[filtered_df[flag] == 1][metric].mean()
-            flag_0 = filtered_df[filtered_df[flag] == 0][metric].mean()
+            metric_data = filtered_df[filtered_df[metric].notna()]
+            flag_1 = metric_data[metric_data[flag] == 1][metric].mean()
+            flag_0 = metric_data[metric_data[flag] == 0][metric].mean()
             
             if pd.notna(flag_1) and pd.notna(flag_0):
                 pct_change = ((flag_1 - flag_0) / flag_0 * 100) if flag_0 != 0 else 0
@@ -319,13 +420,26 @@ def create_moving_average_chart(entity_df, metric, window=3):
     if 'moving_avg_window' in st.session_state:
         window = st.session_state.moving_avg_window
     
-    entity_df_sorted = entity_df.sort_values('week' if 'week' in entity_df.columns else entity_df.index.name or 'index')
+    # Reset index if 'week' is in the index
+    if entity_df.index.name == 'week' or 'week' in str(entity_df.index.names):
+        entity_df = entity_df.reset_index()
+    
+    # Sort by week if it exists as a column
+    if 'week' in entity_df.columns:
+        entity_df_sorted = entity_df.sort_values('week').copy()
+        x_values = entity_df_sorted['week']
+        x_title = 'Week'
+    else:
+        entity_df_sorted = entity_df.copy()
+        x_values = entity_df_sorted.index
+        x_title = 'Game'
+    
     entity_df_sorted[f'{metric}_ma'] = entity_df_sorted[metric].rolling(window=window, min_periods=1).mean()
     
     fig = go.Figure()
     
     fig.add_trace(go.Scatter(
-        x=entity_df_sorted.index if 'week' not in entity_df_sorted.columns else entity_df_sorted['week'],
+        x=x_values,
         y=entity_df_sorted[metric],
         mode='lines+markers',
         name='Actual',
@@ -334,7 +448,7 @@ def create_moving_average_chart(entity_df, metric, window=3):
     ))
     
     fig.add_trace(go.Scatter(
-        x=entity_df_sorted.index if 'week' not in entity_df_sorted.columns else entity_df_sorted['week'],
+        x=x_values,
         y=entity_df_sorted[f'{metric}_ma'],
         mode='lines',
         name=f'{window}-Game Moving Avg',
@@ -343,7 +457,7 @@ def create_moving_average_chart(entity_df, metric, window=3):
     
     fig.update_layout(
         title=f'{metric.replace("_", " ").title()} - Season Progression',
-        xaxis_title='Week' if 'week' in entity_df_sorted.columns else 'Game',
+        xaxis_title=x_title,
         yaxis_title=metric.replace("_", " ").title(),
         height=400,
         hovermode='x unified'
@@ -361,8 +475,8 @@ def main():
         st.session_state.selected_season = None
     if 'selected_team' not in st.session_state:
         st.session_state.selected_team = None
-    if 'selected_player' not in st.session_state:
-        st.session_state.selected_player = None
+    if 'selected_position_group' not in st.session_state:
+        st.session_state.selected_position_group = None
     
     seasons = sorted(df['season'].unique())
     selected_season = st.sidebar.selectbox("Select Season", options=['All'] + seasons, key='season_select')
@@ -377,15 +491,23 @@ def main():
     selected_team = st.sidebar.selectbox("Select Team", options=['All'] + teams, key='team_select')
     st.session_state.selected_team = selected_team
     
+    # Position Group Filter
+    position_groups = ['All'] + list(POSITION_GROUPS.keys())
+    selected_position_group = st.sidebar.selectbox(
+        "Select Position Group", 
+        options=position_groups, 
+        format_func=lambda x: x if x == 'All' else f"{x} - {POSITION_GROUPS[x]['name']}",
+        key='position_group_select'
+    )
+    st.session_state.selected_position_group = selected_position_group
+    
     filtered_df = df.copy()
     if selected_season != 'All':
         filtered_df = filtered_df[filtered_df['season'] == selected_season]
     if selected_team != 'All':
         filtered_df = filtered_df[filtered_df['team'] == selected_team]
-    
-    players = sorted(filtered_df['player_display_name'].unique())
-    selected_player = st.sidebar.selectbox("Select Player", options=['All'] + players, key='player_select')
-    st.session_state.selected_player = selected_player
+    if selected_position_group != 'All':
+        filtered_df = filtered_df[filtered_df['position_group'] == selected_position_group]
 
     # Moving Average Window Filter
     moving_avg_window = st.sidebar.slider(
@@ -398,40 +520,37 @@ def main():
     )
     st.session_state.moving_avg_window = moving_avg_window
     
-    st.sidebar.info(f"**Active Filters:**\n\n Season: `{selected_season}`\n\n Team: `{selected_team}`\n\n Player: `{selected_player}`\n\n Moving Average Window: `{moving_avg_window}`")
+    st.sidebar.info(f"**Active Filters:**\n\n Season: `{selected_season}`\n\n Team: `{selected_team}`\n\n Position: `{selected_position_group}`\n\n Moving Average Window: `{moving_avg_window}`")
     
-    # Metric Selection
+    # Metric Selection - filtered by position group
     st.sidebar.divider()
     st.sidebar.subheader("Select Metrics (Max 3)")
     
     selected_metrics = []
     
-    with st.sidebar.expander("Passing Stats"):
-        available_pass = [stat for stat in pass_stats if stat in df.columns]
-        pass_selected = st.multiselect("Select passing metrics:", available_pass, key='pass_metrics')
-        selected_metrics.extend(pass_selected)
-    
-    with st.sidebar.expander("Rushing Stats"):
-        available_rush = [stat for stat in rush_stats if stat in df.columns]
-        rush_selected = st.multiselect("Select rushing metrics:", available_rush, key='rush_metrics')
-        selected_metrics.extend(rush_selected)
-    
-    with st.sidebar.expander("Receiving Stats"):
-        available_rec = [stat for stat in rec_stats if stat in df.columns]
-        rec_selected = st.multiselect("Select receiving metrics:", available_rec, key='rec_metrics')
-        selected_metrics.extend(rec_selected)
-    
-    with st.sidebar.expander("Player Performance Ratios"):
-        available_ratios = [stat for stat in performance_ratios if stat in df.columns]
-        st.caption("These metrics show efficiency and utilization rates")
-        ratio_selected = st.multiselect("Select performance ratios:", available_ratios, key='ratio_metrics',
-                                       format_func=lambda x: f"{x.replace('_', ' ').title()}")
-        if ratio_selected:
-            st.markdown("**Selected Ratio Descriptions:**")
-            for ratio in ratio_selected:
-                if ratio in performance_ratio_descriptions:
-                    st.caption(f"• **{ratio.replace('_', ' ').title()}**: {performance_ratio_descriptions[ratio]}")
-        selected_metrics.extend(ratio_selected)
+    if selected_position_group != 'All':
+        stats, ratios = get_position_metrics(selected_position_group, df)
+        
+        # Only show stats expander if there are stats available
+        if stats:
+            with st.sidebar.expander(f"{selected_position_group} Stats", expanded=True):
+                st.caption(f"Primary statistics for {POSITION_GROUPS[selected_position_group]['name']}")
+                stats_selected = st.multiselect("Select statistics:", stats, key='position_stats',format_func=format_metric_name)
+                selected_metrics.extend(stats_selected)
+        
+        # Only show ratios expander if there are ratios available
+        if ratios:
+            with st.sidebar.expander(f"{selected_position_group} Performance Ratios"):
+                st.caption("Efficiency and utilization metrics")
+                ratios_selected = st.multiselect("Select ratios:", ratios, key='position_ratios',format_func=format_metric_name)
+                if ratios_selected:
+                    st.markdown("**Selected Ratio Descriptions:**")
+                    for ratio in ratios_selected:
+                        if ratio in performance_ratio_descriptions:
+                            st.caption(f"• **{ratio.replace('_', ' ').title()}**: {performance_ratio_descriptions[ratio]}")
+                selected_metrics.extend(ratios_selected)
+    else:
+        st.sidebar.info("Select a position group to view available metrics")
     
     if len(selected_metrics) > 3:
         st.sidebar.error("Please select a maximum of 3 metrics")
@@ -440,15 +559,7 @@ def main():
     st.sidebar.info(f"**Selected: {len(selected_metrics)}/3 metrics**")
     st.sidebar.divider()
    
-    result_df = df.copy()
-    if selected_season != 'All':
-        result_df = result_df[result_df['season'] == selected_season]
-    if selected_team != 'All':
-        result_df = result_df[result_df['team'] == selected_team]
-    if selected_player != 'All':
-        result_df = result_df[result_df['player_display_name'] == selected_player]
-    if moving_avg_window != '10': 
-        result_df=result_df[result_df['week'] == moving_avg_window]
+    result_df = filtered_df.copy()
     
     # MAIN CONTENT
     st.markdown('<h1 class="main-header">NFL Analytics Dashboard</h1>', unsafe_allow_html=True)
@@ -457,16 +568,16 @@ def main():
     with col1:
         st.metric("Total Records", len(result_df))
     with col2:
-        st.metric("Unique Players", result_df['player_display_name'].nunique())
+        st.metric("Unique Players", result_df['player_display_name'].nunique() if 'player_display_name' in result_df.columns else 0)
     with col3:
         st.metric("Unique Teams", result_df['team'].nunique())
     
-    tab1, tab2, tab3 = st.tabs(["Data View", "Model Analysis", "Team/Player Insights"])
+    tab1, tab2, tab3 = st.tabs(["Data View", "Model Analysis", "Team/Position Insights"])
     
     with tab1:
         st.subheader("Team Performance Summary")
         
-        show_aggregated = (selected_season == 'All' and selected_team == 'All' and selected_player == 'All')
+        show_aggregated = (selected_season == 'All' and selected_team == 'All' and selected_position_group == 'All')
         
         if show_aggregated:
             st.write("**Aggregated team statistics across all seasons**")
@@ -504,15 +615,15 @@ def main():
         else:
             st.write("**Filtered data view**")
             if selected_metrics:
-                display_cols = ['season', 'team', 'player_display_name'] + selected_metrics
-                additional_cols = ['attempts', 'is_thursday', 'is_international', 'travel_distance']
+                display_cols = ['season', 'team', 'player_display_name', 'position_group'] + selected_metrics
+                additional_cols = ['week', 'is_thursday', 'is_international', 'travel_distance']
                 for col in additional_cols:
                     if col in result_df.columns and col not in display_cols:
                         display_cols.append(col)
                 display_cols = [col for col in display_cols if col in result_df.columns]
                 st.dataframe(result_df[display_cols], use_container_width=True, height=400)
             else:
-                default_cols = ['week','season', 'team', 'player_display_name', 'attempts', 'is_thursday', 'is_international', 'travel_distance']
+                default_cols = ['week','season', 'team', 'player_display_name', 'position_group', 'is_thursday', 'is_international', 'travel_distance']
                 display_cols = [col for col in default_cols if col in result_df.columns]
                 st.dataframe(result_df[display_cols], use_container_width=True, height=400)
     
@@ -534,7 +645,13 @@ def main():
         elif selected_flag not in result_df.columns:
             st.warning(f"Flag '{selected_flag_name}' not found in dataset")
         else:
-            st.info(f"**Analyzing impact of {selected_flag_name} on selected metrics**")
+            entity_description = "selected filters"
+            if selected_position_group != 'All':
+                entity_description = POSITION_GROUPS[selected_position_group]['name']
+            if selected_team != 'All':
+                entity_description = f"{selected_team} {entity_description}" if selected_position_group != 'All' else selected_team
+            
+            st.info(f"**Analyzing impact of {selected_flag_name} on {entity_description}**")
             
             if analysis_method == 'Statistical Comparison':
                 impact_results = calculate_flag_impact(result_df, selected_metrics, selected_flag)
@@ -575,23 +692,23 @@ def main():
             
             else:  # Random Forest Model
                 st.subheader("Random Forest Feature Importance")
-                st.write("This model identifies which metrics are most predictive of the selected flag condition.")
+                st.write(f"This model identifies which metrics are most predictive of the selected flag condition.")
                 
-                all_numeric_cols = result_df.select_dtypes(include=[np.number]).columns.tolist()
-                exclude_cols = ['season', 'week', 'away_score', 'home_score', 'result', 'total', 'isaway', 'is_thursday',
-                              'extended_away_games', 'is_international', 'overtime', 'div_game', 'lead_changes', 'gsis',
-                              'old_game_id', 'jersey_number', 'season_type', 'opponent_team', 'depth_chart_position',
-                              'football_name', 'recent_team', 'status', 'status_description_abbr', 'game_type',
-                              'player_name', 'position', 'game_id', 'gameday', 'weekday', 'location', 'stadium',
-                              'away_rest', 'home_rest', 'week_after_is_international', 'defensive_snaps',
-                              'team_defensive_snaps', 'special_team_snaps', 'team_special_team_snaps',
-                              'sack_fumbles_lost', 'passing_first_downs', 'passing_2pt_conversions',
-                              'rushing_first_downs', 'rushing_fumbles_lost', 'receiving_fumbles_lost',
-                              'receiving_first_downs', 'receiving_2pt_conversions', 'yards_after_catch',
-                              'player_name_flat', 'travel_distance_home', 'travel_distance_away']
-                rf_metrics = [col for col in all_numeric_cols if col not in exclude_cols]
+                # Determine which metrics to use based on filters
+                if selected_position_group != 'All':
+                    stats, ratios = get_position_metrics(selected_position_group, result_df)
+                    rf_metrics = stats + ratios
+                    universal_metrics = ['offensive_snaps', 'lead_changes', 'travel_distance']
+                    rf_metrics.extend([m for m in universal_metrics if m in result_df.columns])
+                else:
+                    # Use all numeric columns
+                    all_numeric_cols = result_df.select_dtypes(include=[np.number]).columns.tolist()
+                    exclude_cols = ['season', 'week', 'away_score', 'home_score', 'result', 'total', 'isaway', 'is_thursday',
+                                  'extended_away_games', 'is_international', 'overtime', 'div_game', 'lead_changes', 'gsis',
+                                  'old_game_id', 'jersey_number', 'season_type', 'game_id']
+                    rf_metrics = [col for col in all_numeric_cols if col not in exclude_cols]
                 
-                with st.spinner("Training Random Forest model on all available metrics..."):
+                with st.spinner(f"Training Random Forest model..."):
                     importances, metrics_dict, model = train_rf_model(result_df, rf_metrics, selected_flag)
                 
                 if importances is not None:
@@ -637,28 +754,30 @@ def main():
                                     yaxis={'categoryorder': 'total ascending'}, showlegend=False)
                     st.plotly_chart(fig, use_container_width=True)
                     
-                    st.subheader("Your Selected Metrics Rankings")
-                    cols_rank = st.columns(min(len(selected_metrics), 3))
-                    
-                    for idx, metric in enumerate(selected_metrics):
-                        metric_row = importances[importances['metric'] == metric]
-                        if not metric_row.empty:
-                            rank = importances.index[importances['metric'] == metric].tolist()[0] + 1
-                            importance_val = metric_row['importance'].values[0]
-                            with cols_rank[idx % 3]:
-                                rank_emoji = "🏆" if rank <= 5 else "⭐" if rank <= 20 else "📍"
-                                rank_color = "off" if rank <= 20 else "inverse"
-                                st.metric(label=f"{rank_emoji} {metric.replace('_', ' ').title()}", value=f"Rank #{rank}",
-                                        delta=f"Importance: {importance_val:.4f}", delta_color=rank_color)
+                    if selected_metrics:
+                        st.subheader("Your Selected Metrics Rankings")
+                        cols_rank = st.columns(min(len(selected_metrics), 3))
+                        
+                        for idx, metric in enumerate(selected_metrics):
+                            metric_row = importances[importances['metric'] == metric]
+                            if not metric_row.empty:
+                                rank = importances.index[importances['metric'] == metric].tolist()[0] + 1
+                                importance_val = metric_row['importance'].values[0]
+                                with cols_rank[idx % 3]:
+                                    rank_emoji = "🏆" if rank <= 5 else "⭐" if rank <= 20 else "📍"
+                                    rank_color = "off" if rank <= 20 else "inverse"
+                                    st.metric(label=f"{rank_emoji} {metric.replace('_', ' ').title()}", value=f"Rank #{rank}",
+                                            delta=f"Importance: {importance_val:.4f}", delta_color=rank_color)
                     
                     st.divider()
                     top_metric = importances.iloc[0]
                     st.success(f"**Key Insight:** `{top_metric['metric'].replace('_', ' ').title()}` is the #1 most important metric "
                              f"for predicting {selected_flag_name} (importance: {top_metric['importance']:.4f})")
                     
-                    highly_predictive_selected = [m for m in selected_metrics if m in importances.head(5)['metric'].values]
-                    if highly_predictive_selected:
-                        st.success(f"**Your selection includes top predictors:** {', '.join([m.replace('_', ' ').title() for m in highly_predictive_selected])}")
+                    if selected_metrics:
+                        highly_predictive_selected = [m for m in selected_metrics if m in importances.head(5)['metric'].values]
+                        if highly_predictive_selected:
+                            st.success(f"**Your selection includes top predictors:** {', '.join([m.replace('_', ' ').title() for m in highly_predictive_selected])}")
                     
                     st.subheader("📋 Complete Feature Importance Table")
                     display_table = importances.copy()
@@ -679,12 +798,12 @@ def main():
                     st.error("Unable to train model. Check your data and selected metrics.")
     
     with tab3:
-        st.subheader("Team/Player Performance Insights")
+        st.subheader("Team/Position Performance Insights")
         st.write("Analyze how away games, Thursday games, and international games impact performance metrics.")
         
         col1, col2 = st.columns(2)
         with col1:
-            insight_entity = st.radio("Analyze by:", options=['Team', 'Player'], key='insight_entity', horizontal=True)
+            insight_entity = st.radio("Analyze by:", options=['Team', 'Position Group'], key='insight_entity', horizontal=True)
         
         with col2:
             if insight_entity == 'Team':
@@ -695,17 +814,18 @@ def main():
                     entity_selected = selected_team
                     st.success(f"**{selected_team}**")
             else:
-                if selected_player == 'All':
-                    st.info("Select a player from the sidebar")
+                if selected_position_group == 'All':
+                    st.info("Select a position group from the sidebar")
                     entity_selected = None
                 else:
-                    entity_selected = selected_player
-                    st.success(f"**{selected_player}**")
+                    entity_selected = selected_position_group
+                    st.success(f"**{POSITION_GROUPS[selected_position_group]['name']}**")
         
         if entity_selected:
             st.divider()
             
-            corr_result = create_flag_correlation_matrix(df, insight_entity.lower(), entity_selected, selected_season)
+            entity_type = 'team' if insight_entity == 'Team' else 'position_group'
+            corr_result = create_flag_correlation_matrix(df, entity_type, entity_selected, selected_season)
             
             if corr_result is not None:
                 flag_correlations, available_flags, available_metrics = corr_result
@@ -714,49 +834,52 @@ def main():
                 st.write("Shows how strongly each flag condition correlates with performance metrics. "
                         "Red = negative impact, Blue = positive impact.")
                 
-                fig_corr = go.Figure(data=go.Heatmap(
-                    z=flag_correlations.values,
-                    x=[f.replace('_', ' ').title() for f in available_flags],
-                    y=[m.replace('_', ' ').title() for m in available_metrics],
-                    colorscale='RdBu', zmid=0, text=flag_correlations.values.round(2),
-                    texttemplate='%{text}', textfont={"size": 9}, colorbar=dict(title="Correlation"),
-                    hovertemplate='<b>%{y}</b><br>%{x}<br>Correlation: %{z:.3f}<extra></extra>'))
-                
-                fig_corr.update_layout(height=max(400, len(available_metrics) * 20),
-                                      xaxis_title='Game Condition', yaxis_title='Performance Metric',
-                                      yaxis={'tickfont': {'size': 9}})
-                st.plotly_chart(fig_corr, use_container_width=True)
-                
-                st.divider()
-                st.subheader("Key Insights")
-                
-                for flag in available_flags:
-                    flag_display = flag.replace('_', ' ').title()
-                    correlations = flag_correlations[flag].abs().sort_values(ascending=False).head(5)
+                if len(flag_correlations) > 0:
+                    fig_corr = go.Figure(data=go.Heatmap(
+                        z=flag_correlations.values,
+                        x=[f.replace('_', ' ').title() for f in flag_correlations.columns],
+                        y=[m.replace('_', ' ').title() for m in flag_correlations.index],
+                        colorscale='RdBu', zmid=0, text=flag_correlations.values.round(2),
+                        texttemplate='%{text}', textfont={"size": 9}, colorbar=dict(title="Correlation"),
+                        hovertemplate='<b>%{y}</b><br>%{x}<br>Correlation: %{z:.3f}<extra></extra>'))
                     
-                    with st.expander(f"{flag_display} - Top 5 Impacted Metrics"):
-                        for idx, (metric, corr_val) in enumerate(correlations.items(), 1):
-                            actual_corr = flag_correlations.loc[metric, flag]
-                            direction = "📈 Positive" if actual_corr > 0 else "📉 Negative"
-                            strength = "Strong" if abs(actual_corr) > 0.5 else "Moderate" if abs(actual_corr) > 0.3 else "Weak"
-                            col_a, col_b, col_c = st.columns([2, 1, 1])
-                            with col_a:
-                                st.write(f"**{idx}. {metric.replace('_', ' ').title()}**")
-                            with col_b:
-                                st.write(f"{direction}")
-                            with col_c:
-                                st.write(f"{strength} ({actual_corr:.3f})")
+                    fig_corr.update_layout(height=max(400, len(flag_correlations) * 20),
+                                          xaxis_title='Game Condition', yaxis_title='Performance Metric',
+                                          yaxis={'tickfont': {'size': 9}})
+                    st.plotly_chart(fig_corr, use_container_width=True)
+                    
+                    st.divider()
+                    st.subheader("Key Insights")
+                    
+                    for flag in flag_correlations.columns:
+                        flag_display = flag.replace('_', ' ').title()
+                        correlations = flag_correlations[flag].abs().sort_values(ascending=False).head(5)
+                        
+                        if len(correlations) > 0:
+                            with st.expander(f"{flag_display} - Top {len(correlations)} Impacted Metrics"):
+                                for idx, (metric, corr_val) in enumerate(correlations.items(), 1):
+                                    actual_corr = flag_correlations.loc[metric, flag]
+                                    direction = "📈 Positive" if actual_corr > 0 else "📉 Negative"
+                                    strength = "Strong" if abs(actual_corr) > 0.5 else "Moderate" if abs(actual_corr) > 0.3 else "Weak"
+                                    col_a, col_b, col_c = st.columns([2, 1, 1])
+                                    with col_a:
+                                        st.write(f"**{idx}. {metric.replace('_', ' ').title()}**")
+                                    with col_b:
+                                        st.write(f"{direction}")
+                                    with col_c:
+                                        st.write(f"{strength} ({actual_corr:.3f})")
+                else:
+                    st.warning("No correlation data available for the selected entity and filters.")
                 
                 st.divider()
                 st.subheader("Detailed Metric Analysis")
                 st.write("Compare how a specific metric performs under different game conditions.")
                 
-                available_display_metrics = [m for m in available_metrics if m in df.columns]
-                if available_display_metrics:
-                    selected_insight_metric = st.selectbox("Select a metric to analyze:", options=available_display_metrics,
+                if available_metrics and len(available_metrics) > 0:
+                    selected_insight_metric = st.selectbox("Select a metric to analyze:", options=available_metrics,
                                                           format_func=lambda x: x.replace('_', ' ').title(), key='insight_metric')
                     
-                    comparison_df = create_flag_impact_comparison(df, insight_entity.lower(), entity_selected,
+                    comparison_df = create_flag_impact_comparison(df, entity_type, entity_selected,
                                                                  selected_season, selected_insight_metric)
                     
                     if comparison_df is not None and len(comparison_df) > 0:
@@ -781,7 +904,7 @@ def main():
                         if selected_season != 'All':
                             entity_ma_df = entity_ma_df[entity_ma_df['season'] == selected_season]
                         
-                        if insight_entity == 'Team':
+                        if entity_type == 'team':
                             team_abbr = None
                             for abbr, full_name in nfl_team_names.items():
                                 if full_name == entity_selected:
@@ -789,87 +912,101 @@ def main():
                                     break
                             if team_abbr:
                                 entity_ma_df = entity_ma_df[entity_ma_df['team'] == team_abbr]
+                            else:
+                                entity_ma_df = entity_ma_df[entity_ma_df['team'] == entity_selected]
                         else:
-                            entity_ma_df = entity_ma_df[entity_ma_df['player_display_name'] == entity_selected]
+                            entity_ma_df = entity_ma_df[entity_ma_df['position_group'] == entity_selected]
                         
                         # Show moving average trend for this metric
                         if len(entity_ma_df) > 0 and selected_insight_metric in entity_ma_df.columns:
                             st.subheader(f"📈 Season Trend with {moving_avg_window}-Game Moving Average")
-                            ma_fig = create_moving_average_chart(entity_ma_df, selected_insight_metric)
-                            st.plotly_chart(ma_fig, use_container_width=True)
                             
-                            # Add flag overlays to show when conditions occurred
+                            # Aggregate by week for position groups or show individual games for teams
+                            if 'week' in entity_ma_df.columns:
+                                if entity_type == 'position_group':
+                                    weekly_avg = entity_ma_df.groupby('week')[selected_insight_metric].mean().reset_index()
+                                    ma_fig = create_moving_average_chart(weekly_avg, selected_insight_metric)
+                                else:
+                                    ma_fig = create_moving_average_chart(entity_ma_df, selected_insight_metric)
+                                st.plotly_chart(ma_fig, use_container_width=True)
+                            
+                            # Add flag overlays
                             st.write("**Game Condition Breakdown Over Season**")
                             
-                            # Sort by week for proper timeline
-                            entity_ma_sorted = entity_ma_df.sort_values('week' if 'week' in entity_ma_df.columns else entity_ma_df.index.name or 'index').copy()
-                            
-                            # Create flag timeline visualization
-                            fig_timeline = go.Figure()
-                            
-                            # Add metric line
-                            fig_timeline.add_trace(go.Scatter(
-                                x=entity_ma_sorted.index if 'week' not in entity_ma_sorted.columns else entity_ma_sorted['week'],
-                                y=entity_ma_sorted[selected_insight_metric],
-                                mode='lines+markers',
-                                name=selected_insight_metric.replace('_', ' ').title(),
-                                line=dict(color='#4ecdc4', width=2),
-                                marker=dict(size=8),
-                                hovertemplate='%{y:.2f}<extra></extra>'
-                            ))
-                            
-                            # Overlay flag indicators
-                            flags_to_show = ['isaway', 'is_thursday', 'is_international']
-                            flag_colors = {'isaway': '#ff6b6b', 'is_thursday': '#ffd93d', 'is_international': '#a78bfa'}
-                            flag_names = {'isaway': 'Away', 'is_thursday': 'Thursday', 'is_international': 'International'}
-                            
-                            for flag in flags_to_show:
-                                if flag in entity_ma_sorted.columns:
-                                    flag_games = entity_ma_sorted[entity_ma_sorted[flag] == 1]
-                                    if len(flag_games) > 0:
-                                        fig_timeline.add_trace(go.Scatter(
-                                            x=flag_games.index if 'week' not in flag_games.columns else flag_games['week'],
-                                            y=flag_games[selected_insight_metric],
-                                            mode='markers',
-                                            name=flag_names[flag],
-                                            marker=dict(size=14, color=flag_colors[flag], symbol='star',
-                                                       line=dict(width=2, color='white')),
-                                            hovertemplate=f'<b>{flag_names[flag]} Game</b><br>Value: %{{y:.2f}}<extra></extra>'
-                                        ))
-                            
-                            fig_timeline.update_layout(
-                                title=f'{selected_insight_metric.replace("_", " ").title()} with Game Conditions Highlighted',
-                                xaxis_title='Week' if 'week' in entity_ma_sorted.columns else 'Game',
-                                yaxis_title=selected_insight_metric.replace("_", " ").title(),
-                                height=450,
-                                hovermode='x unified',
-                                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                            )
-                            
-                            st.plotly_chart(fig_timeline, use_container_width=True)
-                            
-                            # Statistics comparison
-                            st.write("**Performance Statistics by Condition**")
-                            stats_cols = st.columns(4)
-                            
-                            with stats_cols[0]:
-                                overall_avg = entity_ma_sorted[selected_insight_metric].mean()
-                                st.metric("Overall Average", f"{overall_avg:.2f}")
-                            
-                            stats_idx = 1
-                            for flag in flags_to_show:
-                                if flag in entity_ma_sorted.columns and stats_idx < 4:
-                                    flag_avg = entity_ma_sorted[entity_ma_sorted[flag] == 1][selected_insight_metric].mean()
-                                    if pd.notna(flag_avg):
-                                        diff_pct = ((flag_avg - overall_avg) / overall_avg * 100) if overall_avg != 0 else 0
-                                        with stats_cols[stats_idx]:
-                                            st.metric(
-                                                flag_names[flag],
-                                                f"{flag_avg:.2f}",
-                                                delta=f"{diff_pct:.1f}%",
-                                                delta_color="normal" if abs(diff_pct) < 5 else "inverse"
-                                            )
-                                        stats_idx += 1
+                            if 'week' in entity_ma_df.columns:
+                                if entity_type == 'position_group':
+                                    entity_ma_sorted = entity_ma_df.groupby('week').agg({
+                                        selected_insight_metric: 'mean',
+                                        'isaway': lambda x: (x == 1).any() if 'isaway' in entity_ma_df.columns else 0,
+                                        'is_thursday': lambda x: (x == 1).any() if 'is_thursday' in entity_ma_df.columns else 0,
+                                        'is_international': lambda x: (x == 1).any() if 'is_international' in entity_ma_df.columns else 0
+                                    }).reset_index()
+                                else:
+                                    entity_ma_sorted = entity_ma_df.sort_values('week').copy()
+                                
+                                fig_timeline = go.Figure()
+                                
+                                fig_timeline.add_trace(go.Scatter(
+                                    x=entity_ma_sorted['week'],
+                                    y=entity_ma_sorted[selected_insight_metric],
+                                    mode='lines+markers',
+                                    name=selected_insight_metric.replace('_', ' ').title(),
+                                    line=dict(color='#4ecdc4', width=2),
+                                    marker=dict(size=8),
+                                    hovertemplate='%{y:.2f}<extra></extra>'
+                                ))
+                                
+                                flags_to_show = ['isaway', 'is_thursday', 'is_international']
+                                flag_colors = {'isaway': '#ff6b6b', 'is_thursday': '#ffd93d', 'is_international': '#a78bfa'}
+                                flag_names = {'isaway': 'Away', 'is_thursday': 'Thursday', 'is_international': 'International'}
+                                
+                                for flag in flags_to_show:
+                                    if flag in entity_ma_sorted.columns:
+                                        flag_games = entity_ma_sorted[entity_ma_sorted[flag] == 1]
+                                        if len(flag_games) > 0:
+                                            fig_timeline.add_trace(go.Scatter(
+                                                x=flag_games['week'],
+                                                y=flag_games[selected_insight_metric],
+                                                mode='markers',
+                                                name=flag_names[flag],
+                                                marker=dict(size=14, color=flag_colors[flag], symbol='star',
+                                                           line=dict(width=2, color='white')),
+                                                hovertemplate=f'<b>{flag_names[flag]} Game</b><br>Value: %{{y:.2f}}<extra></extra>'
+                                            ))
+                                
+                                fig_timeline.update_layout(
+                                    title=f'{selected_insight_metric.replace("_", " ").title()} with Game Conditions Highlighted',
+                                    xaxis_title='Week',
+                                    yaxis_title=selected_insight_metric.replace("_", " ").title(),
+                                    height=450,
+                                    hovermode='x unified',
+                                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                                )
+                                
+                                st.plotly_chart(fig_timeline, use_container_width=True)
+                                
+                                # Statistics comparison
+                                st.write("**Performance Statistics by Condition**")
+                                stats_cols = st.columns(4)
+                                
+                                with stats_cols[0]:
+                                    overall_avg = entity_ma_df[selected_insight_metric].mean()
+                                    st.metric("Overall Average", f"{overall_avg:.2f}")
+                                
+                                stats_idx = 1
+                                for flag in flags_to_show:
+                                    if flag in entity_ma_df.columns and stats_idx < 4:
+                                        flag_avg = entity_ma_df[entity_ma_df[flag] == 1][selected_insight_metric].mean()
+                                        if pd.notna(flag_avg):
+                                            diff_pct = ((flag_avg - overall_avg) / overall_avg * 100) if overall_avg != 0 else 0
+                                            with stats_cols[stats_idx]:
+                                                st.metric(
+                                                    flag_names[flag],
+                                                    f"{flag_avg:.2f}",
+                                                    delta=f"{diff_pct:.1f}%",
+                                                    delta_color="normal" if abs(diff_pct) < 5 else "inverse"
+                                                )
+                                            stats_idx += 1
                         
                         st.divider()
                         
@@ -892,46 +1029,6 @@ def main():
                             st.error(f"**Biggest Negative Impact:** {worst_impact['flag']} ({worst_impact['pct_change']:.1f}% decrease)")
                         with col_sum2:
                             st.success(f"**Best Performance:** {best_impact['flag']} ({best_impact['pct_change']:.1f}% change)")
-                    
-                    st.divider()
-                    
-                    # Add moving average visualization for the selected metric
-                    if selected_insight_metric in selected_metrics and entity_selected:
-                        st.subheader(f"Season Trend Analysis with {moving_avg_window}-Game Moving Average")
-                        st.write(f"Track {selected_insight_metric.replace('_', ' ').title()} performance over the season with smoothed trends.")
-                        
-                        # Get entity data
-                        entity_trend_df = df.copy()
-                        if selected_season != 'All':
-                            entity_trend_df = entity_trend_df[entity_trend_df['season'] == selected_season]
-                        
-                        if insight_entity == 'Team':
-                            team_abbr = None
-                            for abbr, full_name in nfl_team_names.items():
-                                if full_name == entity_selected:
-                                    team_abbr = abbr
-                                    break
-                            if team_abbr:
-                                entity_trend_df = entity_trend_df[entity_trend_df['team'] == team_abbr]
-                        else:
-                            entity_trend_df = entity_trend_df[entity_trend_df['player_display_name'] == entity_selected]
-                        
-                        if len(entity_trend_df) > 0 and selected_insight_metric in entity_trend_df.columns:
-                            ma_fig = create_moving_average_chart(entity_trend_df, selected_insight_metric)
-                            st.plotly_chart(ma_fig, use_container_width=True)
-                            
-                            # Show trend statistics
-                            col_t1, col_t2, col_t3, col_t4 = st.columns(4)
-                            with col_t1:
-                                st.metric("Games Analyzed", len(entity_trend_df))
-                            with col_t2:
-                                st.metric("Season Average", f"{entity_trend_df[selected_insight_metric].mean():.2f}")
-                            with col_t3:
-                                st.metric("Season High", f"{entity_trend_df[selected_insight_metric].max():.2f}")
-                            with col_t4:
-                                st.metric("Season Low", f"{entity_trend_df[selected_insight_metric].min():.2f}")
-                        else:
-                            st.info("Insufficient data for trend analysis with current filters.")
                 
                 st.divider()
                 
@@ -963,8 +1060,14 @@ def main():
                     team_stats = team_stats[team_stats['attempts'] >= 10]
                     
                     if len(team_stats) > 0:
-                        if entity_selected and insight_entity == 'Team':
-                            team_stats['is_selected'] = team_stats['team'] == entity_selected
+                        if entity_selected and entity_type == 'team':
+                            # Convert full name to abbreviation for comparison
+                            team_abbr = None
+                            for abbr, full_name in nfl_team_names.items():
+                                if full_name == entity_selected:
+                                    team_abbr = abbr
+                                    break
+                            team_stats['is_selected'] = team_stats['team'] == (team_abbr if team_abbr else entity_selected)
                         else:
                             team_stats['is_selected'] = False
                         
@@ -1034,7 +1137,7 @@ def main():
             else:
                 st.warning("Insufficient data for correlation analysis. Try selecting a different season or entity.")
         else:
-            st.info("Select a team or player from the sidebar to view performance insights")
+            st.info("Select a team or position group from the sidebar to view performance insights")
 
 if __name__ == "__main__":
     main()
