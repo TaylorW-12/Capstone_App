@@ -1061,7 +1061,7 @@ def main():
                 impact_results = calculate_flag_impact(result_df, selected_metrics, selected_flag)
                 
                 if not impact_results.empty:
-                    st.subheader("📊 Metric Impact Summary")
+                    st.subheader("Metric Impact Summary")
                     
                     cols = st.columns(min(len(selected_metrics), 3))
                     for idx, row in impact_results.iterrows():
@@ -1138,7 +1138,7 @@ def main():
                     
                     colors = ['#00cc96' if metric in selected_metrics else '#ff6b6b' for metric in display_importances['metric']]
                     
-                    st.subheader("📊 Feature Importance Rankings")
+                    st.subheader("Feature Importance Rankings")
                     
                     col_leg1, col_leg2 = st.columns(2)
                     with col_leg1:
@@ -1183,7 +1183,7 @@ def main():
                         if highly_predictive_selected:
                             st.success(f"**Your selection includes top predictors:** {', '.join([m.replace('_', ' ').title() for m in highly_predictive_selected])}")
                     
-                    st.subheader("📋 Complete Feature Importance Table")
+                    st.subheader("Complete Feature Importance Table")
                     display_table = importances.copy()
                     display_table['rank'] = range(1, len(display_table) + 1)
                     display_table['is_selected'] = display_table['metric'].isin(selected_metrics)
@@ -1257,7 +1257,7 @@ def main():
                 st.divider()
                 
                 # Season Trend with Moving Average - Now works for all seasons or specific season
-                st.subheader(f"📈 Season Trend with {moving_avg_window}-Game Moving Average")
+                st.subheader(f"Season Trend with {moving_avg_window}-Game Moving Average")
                 
                 if selected_season == 'All':
                     # Show all seasons
