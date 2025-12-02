@@ -115,8 +115,13 @@ nfl_stadium_coords = {
     "SEA": {"lat": 47.5952, "lon": -122.3316, "stadium": "Lumen Field"},
     "TB": {"lat": 27.9759, "lon": -82.5033, "stadium": "Raymond James Stadium"},
     "TEN": {"lat": 36.1665, "lon": -86.7713, "stadium": "Nissan Stadium"},
-    "WAS": {"lat": 38.9076, "lon": -77.0169, "stadium": "FedExField"}
+    "WAS": {"lat": 38.9076, "lon": -77.0169, "stadium": "FedExField"},
+    "LON": {"lat": 51.5074, "lon": -0.1278, "stadium": "Wembley Stadium / Tottenham Hotspur Stadium (London)"},
+    "MEX": {"lat": 19.4326, "lon": -99.1332, "stadium": "Estadio Azteca (Mexico City)"},
+    "GER": {"lat": 50.0685, "lon": 8.6454, "stadium": "Deutsche Bank Park (Frankfurt)"},
+    "MUN": {"lat": 48.2188, "lon": 11.6247, "stadium": "Allianz Arena (Munich)"}
 }
+
 # Descriptions for performance ratios
 performance_ratio_descriptions = {
     'snap_share': 'Player On-Field % (offensive_snaps / team_offensive_snaps)',
@@ -206,6 +211,11 @@ def create_team_travel_map(df, selected_season, selected_team):
     if len(team_data) == 0:
         return None
     
+    # Check if there are any international games
+    has_international = False
+    if 'is_international' in team_data.columns:
+        has_international = (team_data['is_international'] == 1).any()
+    
     # Get unique weeks and assign colors
     weeks_filtered = sorted(team_data['week'].unique())
     colors = px.colors.qualitative.Plotly + px.colors.qualitative.D3 + px.colors.qualitative.G10
@@ -244,7 +254,6 @@ def create_team_travel_map(df, selected_season, selected_team):
         # Create travel line if there's a previous location
         if prev_lat is not None and prev_lon is not None:
             fig.add_trace(go.Scattergeo(
-                locationmode="USA-states",
                 lon=[prev_lon, lon],
                 lat=[prev_lat, lat],
                 mode="lines",
@@ -288,7 +297,6 @@ def create_team_travel_map(df, selected_season, selected_team):
         
         # Add marker
         fig.add_trace(go.Scattergeo(
-            locationmode="USA-states",
             lon=[lon],
             lat=[lat],
             mode="markers",
@@ -305,15 +313,25 @@ def create_team_travel_map(df, selected_season, selected_team):
         
         prev_lat, prev_lon = lat, lon
     
-    # Update map layout
-    fig.update_layout(
-        title=dict(
-            text=f"{selected_team} - {selected_season} Season Travel Map",
-            font=dict(size=16),
-            x=0.5,
-            xanchor="center"
-        ),
-        geo=dict(
+    # Update map layout - use different projection based on international games
+    if has_international:
+        # World view for international games
+        geo_config = dict(
+            projection_type="natural earth",
+            showland=True,
+            landcolor="rgb(229, 229, 229)",
+            coastlinecolor="rgb(204, 204, 204)",
+            showlakes=True,
+            lakecolor="rgb(255, 255, 255)",
+            showcountries=True,
+            countrycolor="rgb(204, 204, 204)",
+            bgcolor="rgb(243, 243, 243)",
+            center=dict(lat=35, lon=-40),  # Center between US and Europe
+            projection=dict(scale=1.5)
+        )
+    else:
+        # USA-only view for domestic games
+        geo_config = dict(
             scope="usa",
             projection_type="albers usa",
             showland=True,
@@ -323,7 +341,17 @@ def create_team_travel_map(df, selected_season, selected_team):
             lakecolor="rgb(255, 255, 255)",
             subunitcolor="rgb(217, 217, 217)",
             bgcolor="rgb(243, 243, 243)"
+        )
+    
+    fig.update_layout(
+        title=dict(
+            text=f"{selected_team} - {selected_season} Season Travel Map" + 
+                 ("(includes international games)" if has_international else ""),
+            font=dict(size=16),
+            x=0.5,
+            xanchor="center"
         ),
+        geo=geo_config,
         height=500,
         margin={"r": 120, "t": 50, "l": 0, "b": 0},
         legend=dict(
@@ -605,55 +633,7 @@ def create_flag_impact_comparison(df, entity_type, entity_name, season, metric):
     
     return pd.DataFrame(results) if results else None
 
-def create_moving_average_chart(entity_df, metric, window=3):
-    """Create line chart showing metric with moving average using configured window"""
-    if 'moving_avg_window' in st.session_state:
-        window = st.session_state.moving_avg_window
-    
-    # Reset index if 'week' is in the index
-    if entity_df.index.name == 'week' or 'week' in str(entity_df.index.names):
-        entity_df = entity_df.reset_index()
-    
-    # Sort by week if it exists as a column
-    if 'week' in entity_df.columns:
-        entity_df_sorted = entity_df.sort_values('week').copy()
-        x_values = entity_df_sorted['week']
-        x_title = 'Week'
-    else:
-        entity_df_sorted = entity_df.copy()
-        x_values = entity_df_sorted.index
-        x_title = 'Game'
-    
-    entity_df_sorted[f'{metric}_ma'] = entity_df_sorted[metric].rolling(window=window, min_periods=1).mean()
-    
-    fig = go.Figure()
-    
-    fig.add_trace(go.Scatter(
-        x=x_values,
-        y=entity_df_sorted[metric],
-        mode='lines+markers',
-        name='Actual',
-        line=dict(color='lightblue', width=2),
-        marker=dict(size=6)
-    ))
-    
-    fig.add_trace(go.Scatter(
-        x=x_values,
-        y=entity_df_sorted[f'{metric}_ma'],
-        mode='lines',
-        name=f'{window}-Game Moving Avg',
-        line=dict(color='#ff6b6b', width=3)
-    ))
-    
-    fig.update_layout(
-        title=f'{metric.replace("_", " ").title()} - Season Progression',
-        xaxis_title=x_title,
-        yaxis_title=metric.replace("_", " ").title(),
-        height=400,
-        hovermode='x unified'
-    )
-    
-    return fig
+
 
 def main():
     df = load_data()
@@ -1166,95 +1146,7 @@ def main():
                             entity_ma_df = entity_ma_df[entity_ma_df['position_group'] == entity_selected]
                         
                         # Show moving average trend for this metric
-                        if len(entity_ma_df) > 0 and selected_insight_metric in entity_ma_df.columns:
-                            st.subheader(f"📈 Season Trend with {moving_avg_window}-Game Moving Average")
-                            
-                            # Aggregate by week for position groups or show individual games for teams
-                            if 'week' in entity_ma_df.columns:
-                                if entity_type == 'position_group':
-                                    weekly_avg = entity_ma_df.groupby('week')[selected_insight_metric].mean().reset_index()
-                                    ma_fig = create_moving_average_chart(weekly_avg, selected_insight_metric)
-                                else:
-                                    ma_fig = create_moving_average_chart(entity_ma_df, selected_insight_metric)
-                                st.plotly_chart(ma_fig, use_container_width=True)
-                            
-                            # Add flag overlays
-                            st.write("**Game Condition Breakdown Over Season**")
-                            
-                            if 'week' in entity_ma_df.columns:
-                                if entity_type == 'position_group':
-                                    entity_ma_sorted = entity_ma_df.groupby('week').agg({
-                                        selected_insight_metric: 'mean',
-                                        'isaway': lambda x: (x == 1).any() if 'isaway' in entity_ma_df.columns else 0,
-                                        'is_thursday': lambda x: (x == 1).any() if 'is_thursday' in entity_ma_df.columns else 0,
-                                        'is_international': lambda x: (x == 1).any() if 'is_international' in entity_ma_df.columns else 0
-                                    }).reset_index()
-                                else:
-                                    entity_ma_sorted = entity_ma_df.sort_values('week').copy()
-                                
-                                fig_timeline = go.Figure()
-                                
-                                fig_timeline.add_trace(go.Scatter(
-                                    x=entity_ma_sorted['week'],
-                                    y=entity_ma_sorted[selected_insight_metric],
-                                    mode='lines+markers',
-                                    name=selected_insight_metric.replace('_', ' ').title(),
-                                    line=dict(color='#4ecdc4', width=2),
-                                    marker=dict(size=8),
-                                    hovertemplate='%{y:.2f}<extra></extra>'
-                                ))
-                                
-                                flags_to_show = ['isaway', 'is_thursday', 'is_international']
-                                flag_colors = {'isaway': '#ff6b6b', 'is_thursday': '#ffd93d', 'is_international': '#a78bfa'}
-                                flag_names = {'isaway': 'Away', 'is_thursday': 'Thursday', 'is_international': 'International'}
-                                
-                                for flag in flags_to_show:
-                                    if flag in entity_ma_sorted.columns:
-                                        flag_games = entity_ma_sorted[entity_ma_sorted[flag] == 1]
-                                        if len(flag_games) > 0:
-                                            fig_timeline.add_trace(go.Scatter(
-                                                x=flag_games['week'],
-                                                y=flag_games[selected_insight_metric],
-                                                mode='markers',
-                                                name=flag_names[flag],
-                                                marker=dict(size=14, color=flag_colors[flag], symbol='star',
-                                                           line=dict(width=2, color='white')),
-                                                hovertemplate=f'<b>{flag_names[flag]} Game</b><br>Value: %{{y:.2f}}<extra></extra>'
-                                            ))
-                                
-                                fig_timeline.update_layout(
-                                    title=f'{selected_insight_metric.replace("_", " ").title()} with Game Conditions Highlighted',
-                                    xaxis_title='Week',
-                                    yaxis_title=selected_insight_metric.replace("_", " ").title(),
-                                    height=450,
-                                    hovermode='x unified',
-                                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                                )
-                                
-                                st.plotly_chart(fig_timeline, use_container_width=True)
-                                
-                                # Statistics comparison
-                                st.write("**Performance Statistics by Condition**")
-                                stats_cols = st.columns(4)
-                                
-                                with stats_cols[0]:
-                                    overall_avg = entity_ma_df[selected_insight_metric].mean()
-                                    st.metric("Overall Average", f"{overall_avg:.2f}")
-                                
-                                stats_idx = 1
-                                for flag in flags_to_show:
-                                    if flag in entity_ma_df.columns and stats_idx < 4:
-                                        flag_avg = entity_ma_df[entity_ma_df[flag] == 1][selected_insight_metric].mean()
-                                        if pd.notna(flag_avg):
-                                            diff_pct = ((flag_avg - overall_avg) / overall_avg * 100) if overall_avg != 0 else 0
-                                            with stats_cols[stats_idx]:
-                                                st.metric(
-                                                    flag_names[flag],
-                                                    f"{flag_avg:.2f}",
-                                                    delta=f"{diff_pct:.1f}%",
-                                                    delta_color="normal" if abs(diff_pct) < 5 else "inverse"
-                                                )
-                                            stats_idx += 1
+                   
                         
                         st.divider()
                         
