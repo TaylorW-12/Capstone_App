@@ -346,7 +346,7 @@ def create_team_travel_map(df, selected_season, selected_team):
     fig.update_layout(
         title=dict(
             text=f"{selected_team} - {selected_season} Season Travel Map" + 
-                 ("(includes international games)" if has_international else ""),
+                 (" (includes international games)" if has_international else ""),
             font=dict(size=16),
             x=0.5,
             xanchor="center"
@@ -368,6 +368,183 @@ def create_team_travel_map(df, selected_season, selected_team):
     )
     
     return fig
+
+def create_season_trend_with_moving_avg(df, entity_type, entity_name, selected_season, metric, moving_avg_window):
+    """Create season progression chart with moving average and game condition markers"""
+    
+    filtered_df = df.copy()
+    
+    if selected_season != 'All':
+        filtered_df = filtered_df[filtered_df['season'] == selected_season]
+    
+    # Handle both team and position group filtering
+    if entity_type == 'team':
+        team_abbr = None
+        for abbr, full_name in nfl_team_names.items():
+            if full_name == entity_name:
+                team_abbr = abbr
+                break
+        if team_abbr:
+            filtered_df = filtered_df[filtered_df['team'] == team_abbr]
+        else:
+            filtered_df = filtered_df[filtered_df['team'] == entity_name]
+    else:  # position_group
+        filtered_df = filtered_df[filtered_df['position_group'] == entity_name]
+    
+    if len(filtered_df) == 0 or metric not in filtered_df.columns:
+        return None
+    
+    # Sort by week and aggregate by week
+    weekly_data = filtered_df.groupby('week').agg({
+        metric: 'mean',
+        'isaway': 'max',
+        'is_thursday': 'max',
+        'is_international': 'max'
+    }).reset_index()
+    
+    weekly_data = weekly_data.sort_values('week')
+    
+    # Calculate moving average
+    weekly_data[f'{metric}_ma'] = weekly_data[metric].rolling(window=moving_avg_window, min_periods=1).mean()
+    
+    # Create figure
+    fig = go.Figure()
+    
+    # Add actual values line
+    fig.add_trace(go.Scatter(
+        x=weekly_data['week'],
+        y=weekly_data[metric],
+        mode='lines+markers',
+        name='Actual',
+        line=dict(color='#4ecdc4', width=2),
+        marker=dict(size=6)
+    ))
+    
+    # Add moving average line
+    fig.add_trace(go.Scatter(
+        x=weekly_data['week'],
+        y=weekly_data[f'{metric}_ma'],
+        mode='lines',
+        name=f'{moving_avg_window}-Game Moving Avg',
+        line=dict(color='#ff6b6b', width=3)
+    ))
+    
+    # Add markers for game conditions
+    for idx, row in weekly_data.iterrows():
+        markers = []
+        if row['is_thursday'] == 1:
+            markers.append('Thursday')
+        if row['isaway'] == 1:
+            markers.append('Away')
+        if row['is_international'] == 1:
+            markers.append('International')
+        
+        if markers:
+            fig.add_trace(go.Scatter(
+                x=[row['week']],
+                y=[row[metric]],
+                mode='markers+text',
+                marker=dict(
+                    size=15,
+                    symbol='star' if 'Thursday' in markers else 'diamond' if 'International' in markers else 'circle',
+                    color='gold' if 'Thursday' in markers else 'purple' if 'International' in markers else '#00cc96',
+                    line=dict(width=2, color='white')
+                ),
+                text=['★' if 'Thursday' in markers else '◆' if 'International' in markers else ''],
+                textposition='top center',
+                textfont=dict(size=12, color='white'),
+                name=', '.join(markers),
+                showlegend=False,
+                hovertemplate=f'<b>Week {row["week"]}</b><br>{", ".join(markers)}<br>{metric}: {row[metric]:.2f}<extra></extra>'
+            ))
+    
+    fig.update_layout(
+        title=f'{metric.replace("_", " ").title()} - Season Progression',
+        xaxis_title='Week',
+        yaxis_title=metric.replace('_', ' ').title(),
+        height=500,
+        hovermode='x unified',
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        )
+    )
+    
+    return fig
+
+def create_game_condition_breakdown(df, entity_type, entity_name, selected_season, metric):
+    """Create breakdown showing metric performance by game conditions over season"""
+    
+    filtered_df = df.copy()
+    
+    if selected_season != 'All':
+        filtered_df = filtered_df[filtered_df['season'] == selected_season]
+    
+    # Handle both team and position group filtering
+    if entity_type == 'team':
+        team_abbr = None
+        for abbr, full_name in nfl_team_names.items():
+            if full_name == entity_name:
+                team_abbr = abbr
+                break
+        if team_abbr:
+            filtered_df = filtered_df[filtered_df['team'] == team_abbr]
+        else:
+            filtered_df = filtered_df[filtered_df['team'] == entity_name]
+    else:  # position_group
+        filtered_df = filtered_df[filtered_df['position_group'] == entity_name]
+    
+    if len(filtered_df) == 0 or metric not in filtered_df.columns:
+        return None, None
+    
+    # Sort by week
+    filtered_df = filtered_df.sort_values('week')
+    
+    # Create condition labels
+    filtered_df['condition'] = 'Regular'
+    filtered_df.loc[filtered_df['isaway'] == 1, 'condition'] = 'Away'
+    filtered_df.loc[filtered_df['is_thursday'] == 1, 'condition'] = 'Thursday'
+    filtered_df.loc[filtered_df['is_international'] == 1, 'condition'] = 'International'
+    
+    # Calculate averages by condition
+    condition_avg = filtered_df.groupby('condition')[metric].mean().reset_index()
+    condition_avg = condition_avg.sort_values(metric, ascending=False)
+    
+    # Create scatter plot with conditions highlighted
+    fig_scatter = go.Figure()
+    
+    # Plot each condition with different marker
+    for condition in filtered_df['condition'].unique():
+        condition_data = filtered_df[filtered_df['condition'] == condition]
+        
+        marker_style = {
+            'Regular': dict(symbol='circle', color='#4ecdc4', size=8),
+            'Away': dict(symbol='circle', color='#00cc96', size=10),
+            'Thursday': dict(symbol='star', color='gold', size=12),
+            'International': dict(symbol='diamond', color='purple', size=12)
+        }
+        
+        fig_scatter.add_trace(go.Scatter(
+            x=condition_data['week'],
+            y=condition_data[metric],
+            mode='markers',
+            name=condition,
+            marker=marker_style.get(condition, dict(symbol='circle', color='gray', size=8)),
+            hovertemplate=f'<b>Week %{{x}}</b><br>{condition}<br>{metric}: %{{y:.2f}}<extra></extra>'
+        ))
+    
+    fig_scatter.update_layout(
+        title=f'{metric.replace("_", " ").title()} with Game Conditions Highlighted',
+        xaxis_title='Week',
+        yaxis_title=metric.replace('_', ' ').title(),
+        height=400,
+        hovermode='closest'
+    )
+    
+    return fig_scatter, condition_avg
 
 def format_metric_name(metric):
     """Convert metric names from snake_case to Title Case"""
@@ -632,7 +809,6 @@ def create_flag_impact_comparison(df, entity_type, entity_name, season, metric):
                 })
     
     return pd.DataFrame(results) if results else None
-
 
 
 def main():
@@ -1026,8 +1202,8 @@ def main():
                     st.error("Unable to train model. Check your data and selected metrics.")
     
     with tab3:
-        st.subheader("Team/Position Performance Insights")
-        st.write("Analyze how away games, Thursday games, and international games impact performance metrics.")
+        st.subheader("Positional Performance: Season Trends")
+        st.write("Analyze performance trends over seasons with moving averages and game condition markers.")
         
         col1, col2 = st.columns(2)
         with col1:
@@ -1053,124 +1229,68 @@ def main():
             st.divider()
             
             entity_type = 'team' if insight_entity == 'Team' else 'position_group'
-            corr_result = create_flag_correlation_matrix(df, entity_type, entity_selected, selected_season)
             
-            if corr_result is not None:
-                flag_correlations, available_flags, available_metrics = corr_result
-                
-                st.subheader("Flag Impact Correlation Matrix")
-                st.write("Shows how strongly each flag condition correlates with performance metrics. "
-                        "Red = negative impact, Blue = positive impact.")
-                
-                if len(flag_correlations) > 0:
-                    fig_corr = go.Figure(data=go.Heatmap(
-                        z=flag_correlations.values,
-                        x=[f.replace('_', ' ').title() for f in flag_correlations.columns],
-                        y=[m.replace('_', ' ').title() for m in flag_correlations.index],
-                        colorscale='RdBu', zmid=0, text=flag_correlations.values.round(2),
-                        texttemplate='%{text}', textfont={"size": 9}, colorbar=dict(title="Correlation"),
-                        hovertemplate='<b>%{y}</b><br>%{x}<br>Correlation: %{z:.3f}<extra></extra>'))
-                    
-                    fig_corr.update_layout(height=max(400, len(flag_correlations) * 20),
-                                          xaxis_title='Game Condition', yaxis_title='Performance Metric',
-                                          yaxis={'tickfont': {'size': 9}})
-                    st.plotly_chart(fig_corr, use_container_width=True)
-                    
-                    st.divider()
-                    st.subheader("Key Insights")
-                    
-                    for flag in flag_correlations.columns:
-                        flag_display = flag.replace('_', ' ').title()
-                        correlations = flag_correlations[flag].abs().sort_values(ascending=False).head(5)
-                        
-                        if len(correlations) > 0:
-                            with st.expander(f"{flag_display} - Top {len(correlations)} Impacted Metrics"):
-                                for idx, (metric, corr_val) in enumerate(correlations.items(), 1):
-                                    actual_corr = flag_correlations.loc[metric, flag]
-                                    direction = "📈 Positive" if actual_corr > 0 else "📉 Negative"
-                                    strength = "Strong" if abs(actual_corr) > 0.5 else "Moderate" if abs(actual_corr) > 0.3 else "Weak"
-                                    col_a, col_b, col_c = st.columns([2, 1, 1])
-                                    with col_a:
-                                        st.write(f"**{idx}. {metric.replace('_', ' ').title()}**")
-                                    with col_b:
-                                        st.write(f"{direction}")
-                                    with col_c:
-                                        st.write(f"{strength} ({actual_corr:.3f})")
-                else:
-                    st.warning("No correlation data available for the selected entity and filters.")
+            # Get available metrics for the entity
+            if entity_type == 'position_group':
+                stats, ratios = get_position_metrics(entity_selected, df)
+                available_metrics_list = stats + ratios + ['offensive_snaps', 'lead_changes', 'travel_distance']
+                # Filter to only metrics that exist in df
+                available_metrics_list = [m for m in available_metrics_list if m in df.columns]
+            else:
+                # For teams, use common metrics
+                available_metrics_list = [
+                    'attempts', 'completions', 'passing_yards', 'passing_tds', 'interceptions',
+                    'sacks', 'sack_yards', 'carries', 'rushing_yards', 'rushing_tds',
+                    'receptions', 'targets', 'receiving_yards', 'receiving_tds',
+                    'offensive_snaps', 'lead_changes', 'travel_distance'
+                ]
+                available_metrics_list = [m for m in available_metrics_list if m in df.columns]
+            
+            if len(available_metrics_list) > 0:
+                selected_insight_metric = st.selectbox(
+                    "Select a metric to analyze:", 
+                    options=available_metrics_list,
+                    format_func=lambda x: x.replace('_', ' ').title(), 
+                    key='insight_metric'
+                )
                 
                 st.divider()
-                st.subheader("Detailed Metric Analysis")
-                st.write("Compare how a specific metric performs under different game conditions.")
                 
-                if available_metrics and len(available_metrics) > 0:
-                    selected_insight_metric = st.selectbox("Select a metric to analyze:", options=available_metrics,
-                                                          format_func=lambda x: x.replace('_', ' ').title(), key='insight_metric')
+                # Season Trend with Moving Average - Now works for all seasons or specific season
+                st.subheader(f"📈 Season Trend with {moving_avg_window}-Game Moving Average")
+                
+                if selected_season == 'All':
+                    # Show all seasons
+                    available_seasons = sorted(df['season'].unique())
                     
-                    comparison_df = create_flag_impact_comparison(df, entity_type, entity_selected,
-                                                                 selected_season, selected_insight_metric)
-                    
-                    if comparison_df is not None and len(comparison_df) > 0:
-                        st.write(f"**{selected_insight_metric.replace('_', ' ').title()} Performance by Game Condition**")
-                        
-                        cols = st.columns(len(comparison_df))
-                        for idx, row in comparison_df.iterrows():
-                            with cols[idx]:
-                                impact_emoji = "🔴" if row['pct_change'] < 0 else "🟢" if row['pct_change'] > 0 else "⚪"
-                                st.metric(label=f"{impact_emoji} {row['flag']}", value=f"{row['when_true']:.2f}",
-                                        delta=f"{row['pct_change']:.1f}% vs baseline",
-                                        delta_color="normal" if abs(row['pct_change']) < 5 else "inverse")
-                                with st.expander("Details"):
-                                    st.write(f"**When condition is TRUE:** {row['when_true']:.2f}")
-                                    st.write(f"**When condition is FALSE:** {row['when_false']:.2f}")
-                                    st.write(f"**Difference:** {(row['when_true'] - row['when_false']):.2f}")
-                        
-                        st.divider()
-                        
-                        # Get entity data for moving average analysis
-                        entity_ma_df = df.copy()
-                        if selected_season != 'All':
-                            entity_ma_df = entity_ma_df[entity_ma_df['season'] == selected_season]
-                        
-                        if entity_type == 'team':
-                            team_abbr = None
-                            for abbr, full_name in nfl_team_names.items():
-                                if full_name == entity_selected:
-                                    team_abbr = abbr
-                                    break
-                            if team_abbr:
-                                entity_ma_df = entity_ma_df[entity_ma_df['team'] == team_abbr]
+                    for season in available_seasons:
+                        with st.expander(f"Season {season}", expanded=(season == available_seasons[-1])):
+                            trend_fig = create_season_trend_with_moving_avg(
+                                df, entity_type, entity_selected, season, 
+                                selected_insight_metric, moving_avg_window
+                            )
+                            
+                            if trend_fig is not None:
+                                st.plotly_chart(trend_fig, use_container_width=True)
                             else:
-                                entity_ma_df = entity_ma_df[entity_ma_df['team'] == entity_selected]
-                        else:
-                            entity_ma_df = entity_ma_df[entity_ma_df['position_group'] == entity_selected]
-                        
-                        # Show moving average trend for this metric
-                   
-                        
-                        st.divider()
-                        
-                        fig_comparison = go.Figure()
-                        fig_comparison.add_trace(go.Bar(name='Condition False', x=comparison_df['flag'],
-                                                       y=comparison_df['when_false'], marker_color='#4ecdc4'))
-                        fig_comparison.add_trace(go.Bar(name='Condition True', x=comparison_df['flag'],
-                                                       y=comparison_df['when_true'], marker_color='#ff6b6b'))
-                        fig_comparison.update_layout(barmode='group',
-                                                    title=f'{selected_insight_metric.replace("_", " ").title()} by Game Condition',
-                                                    xaxis_title='Game Condition',
-                                                    yaxis_title=selected_insight_metric.replace("_", " ").title(), height=400)
-                        st.plotly_chart(fig_comparison, use_container_width=True)
-                        
-                        st.subheader("Summary")
-                        worst_impact = comparison_df.loc[comparison_df['pct_change'].idxmin()]
-                        best_impact = comparison_df.loc[comparison_df['pct_change'].idxmax()]
-                        col_sum1, col_sum2 = st.columns(2)
-                        with col_sum1:
-                            st.error(f"**Biggest Negative Impact:** {worst_impact['flag']} ({worst_impact['pct_change']:.1f}% decrease)")
-                        with col_sum2:
-                            st.success(f"**Best Performance:** {best_impact['flag']} ({best_impact['pct_change']:.1f}% change)")
-             
-  
+                                st.warning(f"Insufficient data for season {season}.")
+                    
+                    st.info("**Legend:** ⭐ = Thursday Game | ◆ = International Game | Regular markers = Away Games")
+                else:
+                    # Show specific season
+                    trend_fig = create_season_trend_with_moving_avg(
+                        df, entity_type, entity_selected, selected_season, 
+                        selected_insight_metric, moving_avg_window
+                    )
+                    
+                    if trend_fig is not None:
+                        st.plotly_chart(trend_fig, use_container_width=True)
+                        st.info("**Legend:** ⭐ = Thursday Game | ◆ = International Game | Regular markers = Away Games")
+                    else:
+                        st.warning("Insufficient data for trend analysis with current filters.")
+                
+                st.divider()
+                
                 st.divider()
                 
                 # Team scatter plot
@@ -1185,98 +1305,180 @@ def main():
                            'International Games': 'is_international'}
                 selected_scatter_flag = flag_map[scatter_flag]
                 
-                scatter_df = df.copy()
-                if selected_season != 'All':
-                    scatter_df = scatter_df[scatter_df['season'] == selected_season]
-                if selected_scatter_flag:
-                    scatter_df = scatter_df[scatter_df[selected_scatter_flag] == 1]
-                
-                if 'attempts' in scatter_df.columns and 'completions' in scatter_df.columns:
-                    team_stats = scatter_df.groupby('team').agg({
-                        'attempts': 'sum', 'completions': 'sum',
-                        'passing_yards': 'sum' if 'passing_yards' in scatter_df.columns else 'count'
-                    }).reset_index()
+                # Scatter plot can work with all seasons or specific season
+                if selected_season == 'All':
+                    # Show all seasons in expandable sections
+                    available_seasons = sorted(df['season'].unique())
                     
-                    team_stats['completion_pct'] = (team_stats['completions'] / team_stats['attempts'] * 100).round(2)
-                    team_stats = team_stats[team_stats['attempts'] >= 10]
-                    
-                    if len(team_stats) > 0:
-                        if entity_selected and entity_type == 'team':
-                            # Convert full name to abbreviation for comparison
-                            team_abbr = None
-                            for abbr, full_name in nfl_team_names.items():
-                                if full_name == entity_selected:
-                                    team_abbr = abbr
-                                    break
-                            team_stats['is_selected'] = team_stats['team'] == (team_abbr if team_abbr else entity_selected)
-                        else:
-                            team_stats['is_selected'] = False
-                        
-                        team_stats['logo_url'] = team_stats['team'].map(nfl_logos)
-                        
-                        fig_scatter = go.Figure()
-                        
-                        for idx, row in team_stats.iterrows():
-                            color = '#ff6b6b' if row['is_selected'] else '#4ecdc4'
-                            size = 15 if row['is_selected'] else 10
-                            fig_scatter.add_trace(go.Scatter(
-                                x=[row['attempts']], y=[row['completion_pct']], mode='markers',
-                                marker=dict(size=size, color=color, line=dict(width=2, color='white')),
-                                name=row['team'], text=row['team'],
-                                hovertemplate='<b>%{text}</b><br>Attempts: %{x}<br>Completion %: %{y:.1f}%<br><extra></extra>',
-                                showlegend=False))
+                    for season in available_seasons:
+                        with st.expander(f"Season {season} Scatter Analysis", expanded=(season == available_seasons[-1])):
+                            scatter_df = df[df['season'] == season].copy()
                             
-                            if pd.notna(row['logo_url']):
-                                fig_scatter.add_layout_image(dict(
-                                    source=row['logo_url'], xref="x", yref="y",
-                                    x=row['attempts'], y=row['completion_pct'],
-                                    sizex=max(team_stats['attempts']) * 0.05, sizey=3,
-                                    xanchor="center", yanchor="middle", layer="above"))
-                        
-                        X = team_stats['attempts'].values.reshape(-1, 1)
-                        y = team_stats['completion_pct'].values
-                        model = LinearRegression()
-                        model.fit(X, y)
-                        y_pred = model.predict(X)
-                        
-                        fig_scatter.add_trace(go.Scatter(
-                            x=team_stats['attempts'], y=y_pred, mode='lines', name='Trendline',
-                            line=dict(color='rgba(255, 107, 107, 0.5)', dash='dash', width=2), showlegend=True))
-                        
-                        fig_scatter.update_layout(title=f'Team Completion % vs Attempts - {scatter_flag}',
-                                                xaxis_title='Total Attempts', yaxis_title='Completion Percentage (%)',
-                                                height=600, hovermode='closest', showlegend=True)
-                        st.plotly_chart(fig_scatter, use_container_width=True)
-                        
-                        col_scatter1, col_scatter2, col_scatter3, col_scatter4 = st.columns(4)
-                        with col_scatter1:
-                            st.metric("Teams Analyzed", len(team_stats))
-                        with col_scatter2:
-                            st.metric("Avg Completion %", f"{team_stats['completion_pct'].mean():.1f}%")
-                        with col_scatter3:
-                            st.metric("Highest Comp %", f"{team_stats['completion_pct'].max():.1f}%")
-                        with col_scatter4:
-                            st.metric("Lowest Comp %", f"{team_stats['completion_pct'].min():.1f}%")
-                        
-                        col_perf1, col_perf2 = st.columns(2)
-                        with col_perf1:
-                            st.write("**Top 5 Completion %**")
-                            top_5 = team_stats.nlargest(5, 'completion_pct')[['team', 'completion_pct', 'attempts']]
-                            top_5_display = top_5.copy()
-                            top_5_display.columns = ['Team', 'Comp %', 'Attempts']
-                            st.dataframe(top_5_display, hide_index=True, use_container_width=True)
-                        with col_perf2:
-                            st.write("**Bottom 5 Completion %**")
-                            bottom_5 = team_stats.nsmallest(5, 'completion_pct')[['team', 'completion_pct', 'attempts']]
-                            bottom_5_display = bottom_5.copy()
-                            bottom_5_display.columns = ['Team', 'Comp %', 'Attempts']
-                            st.dataframe(bottom_5_display, hide_index=True, use_container_width=True)
-                    else:
-                        st.warning("Insufficient data for scatter plot analysis with current filters.")
+                            if selected_scatter_flag:
+                                scatter_df = scatter_df[scatter_df[selected_scatter_flag] == 1]
+                            
+                            if 'attempts' in scatter_df.columns and 'completions' in scatter_df.columns:
+                                team_stats = scatter_df.groupby('team').agg({
+                                    'attempts': 'sum', 'completions': 'sum',
+                                    'passing_yards': 'sum' if 'passing_yards' in scatter_df.columns else 'count'
+                                }).reset_index()
+                                
+                                team_stats['completion_pct'] = (team_stats['completions'] / team_stats['attempts'] * 100).round(2)
+                                team_stats = team_stats[team_stats['attempts'] >= 10]
+                                
+                                if len(team_stats) > 0:
+                                    if entity_selected and entity_type == 'team':
+                                        team_abbr = None
+                                        for abbr, full_name in nfl_team_names.items():
+                                            if full_name == entity_selected:
+                                                team_abbr = abbr
+                                                break
+                                        team_stats['is_selected'] = team_stats['team'] == (team_abbr if team_abbr else entity_selected)
+                                    else:
+                                        team_stats['is_selected'] = False
+                                    
+                                    team_stats['logo_url'] = team_stats['team'].map(nfl_logos)
+                                    
+                                    fig_scatter = go.Figure()
+                                    
+                                    for idx, row in team_stats.iterrows():
+                                        color = '#ff6b6b' if row['is_selected'] else '#4ecdc4'
+                                        size = 15 if row['is_selected'] else 10
+                                        fig_scatter.add_trace(go.Scatter(
+                                            x=[row['attempts']], y=[row['completion_pct']], mode='markers',
+                                            marker=dict(size=size, color=color, line=dict(width=2, color='white')),
+                                            name=row['team'], text=row['team'],
+                                            hovertemplate='<b>%{text}</b><br>Attempts: %{x}<br>Completion %: %{y:.1f}%<br><extra></extra>',
+                                            showlegend=False))
+                                        
+                                        if pd.notna(row['logo_url']):
+                                            fig_scatter.add_layout_image(dict(
+                                                source=row['logo_url'], xref="x", yref="y",
+                                                x=row['attempts'], y=row['completion_pct'],
+                                                sizex=max(team_stats['attempts']) * 0.05, sizey=3,
+                                                xanchor="center", yanchor="middle", layer="above"))
+                                    
+                                    if len(team_stats) > 1:
+                                        X = team_stats['attempts'].values.reshape(-1, 1)
+                                        y_vals = team_stats['completion_pct'].values
+                                        model = LinearRegression()
+                                        model.fit(X, y_vals)
+                                        y_pred = model.predict(X)
+                                        
+                                        fig_scatter.add_trace(go.Scatter(
+                                            x=team_stats['attempts'], y=y_pred, mode='lines', name='Trendline',
+                                            line=dict(color='rgba(255, 107, 107, 0.5)', dash='dash', width=2), showlegend=True))
+                                    
+                                    fig_scatter.update_layout(title=f'Team Completion % vs Attempts - {scatter_flag} ({season})',
+                                                            xaxis_title='Total Attempts', yaxis_title='Completion Percentage (%)',
+                                                            height=500, hovermode='closest', showlegend=True)
+                                    st.plotly_chart(fig_scatter, use_container_width=True)
+                                    
+                                    col_scatter1, col_scatter2, col_scatter3, col_scatter4 = st.columns(4)
+                                    with col_scatter1:
+                                        st.metric("Teams Analyzed", len(team_stats))
+                                    with col_scatter2:
+                                        st.metric("Avg Completion %", f"{team_stats['completion_pct'].mean():.1f}%")
+                                    with col_scatter3:
+                                        st.metric("Highest Comp %", f"{team_stats['completion_pct'].max():.1f}%")
+                                    with col_scatter4:
+                                        st.metric("Lowest Comp %", f"{team_stats['completion_pct'].min():.1f}%")
+                                else:
+                                    st.warning(f"Insufficient data for season {season}.")
                 else:
-                    st.warning("Required columns (attempts, completions) not found in dataset.")
+                    # Show specific season
+                    scatter_df = df.copy()
+                    if selected_season != 'All':
+                        scatter_df = scatter_df[scatter_df['season'] == selected_season]
+                    if selected_scatter_flag:
+                        scatter_df = scatter_df[scatter_df[selected_scatter_flag] == 1]
+                    
+                    if 'attempts' in scatter_df.columns and 'completions' in scatter_df.columns:
+                        team_stats = scatter_df.groupby('team').agg({
+                            'attempts': 'sum', 'completions': 'sum',
+                            'passing_yards': 'sum' if 'passing_yards' in scatter_df.columns else 'count'
+                        }).reset_index()
+                        
+                        team_stats['completion_pct'] = (team_stats['completions'] / team_stats['attempts'] * 100).round(2)
+                        team_stats = team_stats[team_stats['attempts'] >= 10]
+                        
+                        if len(team_stats) > 0:
+                            if entity_selected and entity_type == 'team':
+                                team_abbr = None
+                                for abbr, full_name in nfl_team_names.items():
+                                    if full_name == entity_selected:
+                                        team_abbr = abbr
+                                        break
+                                team_stats['is_selected'] = team_stats['team'] == (team_abbr if team_abbr else entity_selected)
+                            else:
+                                team_stats['is_selected'] = False
+                            
+                            team_stats['logo_url'] = team_stats['team'].map(nfl_logos)
+                            
+                            fig_scatter = go.Figure()
+                            
+                            for idx, row in team_stats.iterrows():
+                                color = '#ff6b6b' if row['is_selected'] else '#4ecdc4'
+                                size = 15 if row['is_selected'] else 10
+                                fig_scatter.add_trace(go.Scatter(
+                                    x=[row['attempts']], y=[row['completion_pct']], mode='markers',
+                                    marker=dict(size=size, color=color, line=dict(width=2, color='white')),
+                                    name=row['team'], text=row['team'],
+                                    hovertemplate='<b>%{text}</b><br>Attempts: %{x}<br>Completion %: %{y:.1f}%<br><extra></extra>',
+                                    showlegend=False))
+                                
+                                if pd.notna(row['logo_url']):
+                                    fig_scatter.add_layout_image(dict(
+                                        source=row['logo_url'], xref="x", yref="y",
+                                        x=row['attempts'], y=row['completion_pct'],
+                                        sizex=max(team_stats['attempts']) * 0.05, sizey=3,
+                                        xanchor="center", yanchor="middle", layer="above"))
+                            
+                            if len(team_stats) > 1:
+                                X = team_stats['attempts'].values.reshape(-1, 1)
+                                y_vals = team_stats['completion_pct'].values
+                                model = LinearRegression()
+                                model.fit(X, y_vals)
+                                y_pred = model.predict(X)
+                                
+                                fig_scatter.add_trace(go.Scatter(
+                                    x=team_stats['attempts'], y=y_pred, mode='lines', name='Trendline',
+                                    line=dict(color='rgba(255, 107, 107, 0.5)', dash='dash', width=2), showlegend=True))
+                            
+                            fig_scatter.update_layout(title=f'Team Completion % vs Attempts - {scatter_flag}',
+                                                    xaxis_title='Total Attempts', yaxis_title='Completion Percentage (%)',
+                                                    height=600, hovermode='closest', showlegend=True)
+                            st.plotly_chart(fig_scatter, use_container_width=True)
+                            
+                            col_scatter1, col_scatter2, col_scatter3, col_scatter4 = st.columns(4)
+                            with col_scatter1:
+                                st.metric("Teams Analyzed", len(team_stats))
+                            with col_scatter2:
+                                st.metric("Avg Completion %", f"{team_stats['completion_pct'].mean():.1f}%")
+                            with col_scatter3:
+                                st.metric("Highest Comp %", f"{team_stats['completion_pct'].max():.1f}%")
+                            with col_scatter4:
+                                st.metric("Lowest Comp %", f"{team_stats['completion_pct'].min():.1f}%")
+                            
+                            col_perf1, col_perf2 = st.columns(2)
+                            with col_perf1:
+                                st.write("**Top 5 Completion %**")
+                                top_5 = team_stats.nlargest(5, 'completion_pct')[['team', 'completion_pct', 'attempts']]
+                                top_5_display = top_5.copy()
+                                top_5_display.columns = ['Team', 'Comp %', 'Attempts']
+                                st.dataframe(top_5_display, hide_index=True, use_container_width=True)
+                            with col_perf2:
+                                st.write("**Bottom 5 Completion %**")
+                                bottom_5 = team_stats.nsmallest(5, 'completion_pct')[['team', 'completion_pct', 'attempts']]
+                                bottom_5_display = bottom_5.copy()
+                                bottom_5_display.columns = ['Team', 'Comp %', 'Attempts']
+                                st.dataframe(bottom_5_display, hide_index=True, use_container_width=True)
+                        else:
+                            st.warning("Insufficient data for scatter plot analysis with current filters.")
+                    else:
+                        st.warning("Required columns (attempts, completions) not found in dataset.")
             else:
-                st.warning("Insufficient data for correlation analysis. Try selecting a different season or entity.")
+                st.warning("No metrics available for the selected entity.")
         else:
             st.info("Select a team or position group from the sidebar to view performance insights")
         
