@@ -1070,7 +1070,7 @@ def main():
                 impact_results = calculate_flag_impact(result_df, selected_metrics, selected_flag)
                 
                 if not impact_results.empty:
-                    st.subheader("📊 Metric Impact Summary")
+                    st.subheader("Metric Impact Summary")
                     
                     cols = st.columns(min(len(selected_metrics), 3))
                     for idx, row in impact_results.iterrows():
@@ -1257,12 +1257,50 @@ def main():
                 available_metrics_list = [m for m in available_metrics_list if m in df.columns]
             
             if len(available_metrics_list) > 0:
-                selected_insight_metric = st.selectbox(
-                    "Select a metric to analyze:", 
-                    options=available_metrics_list,
-                    format_func=lambda x: x.replace('_', ' ').title(), 
-                    key='insight_metric'
-                )
+                # Check if user has selected metrics from sidebar
+                if selected_metrics:
+                    # Use the first selected metric as default
+                    default_metric = selected_metrics[0]
+                    
+                    col_metric1, col_metric2 = st.columns([3, 1])
+                    
+                    with col_metric1:
+                        selected_insight_metric = st.selectbox(
+                            "Select a metric to analyze:", 
+                            options=selected_metrics,
+                            format_func=lambda x: x.replace('_', ' ').title(), 
+                            key='insight_metric',
+                            index=0
+                        )
+                    
+                    with col_metric2:
+                        # Show description if it's a performance ratio
+                        if selected_insight_metric in performance_ratio_descriptions:
+                            with st.popover("ℹ️ Metric Info"):
+                                st.caption("**Description:**")
+                                st.write(performance_ratio_descriptions[selected_insight_metric])
+                    
+                    st.caption(f"📊 Analyzing from your selected metrics in the sidebar. Selected: {len(selected_metrics)}/3")
+                else:
+                    # No metrics selected - show all available metrics
+                    col_metric1, col_metric2 = st.columns([3, 1])
+                    
+                    with col_metric1:
+                        selected_insight_metric = st.selectbox(
+                            "Select a metric to analyze:", 
+                            options=available_metrics_list,
+                            format_func=lambda x: x.replace('_', ' ').title(), 
+                            key='insight_metric'
+                        )
+                    
+                    with col_metric2:
+                        # Show description if it's a performance ratio
+                        if selected_insight_metric in performance_ratio_descriptions:
+                            with st.popover("ℹ️ Metric Info"):
+                                st.caption("**Description:**")
+                                st.write(performance_ratio_descriptions[selected_insight_metric])
+                    
+                    st.info("💡 **Tip:** Select metrics from the sidebar to limit your choices here to just those metrics")
                 
                 st.divider()
                 
