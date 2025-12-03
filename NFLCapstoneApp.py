@@ -1150,7 +1150,7 @@ def main():
                     # Format metric names for display (capitalize and remove underscores)
                     display_importances['metric_display'] = display_importances['metric'].str.replace('_', ' ').str.title()
                     
-                    st.subheader("📊 Feature Importance Rankings")
+                    st.subheader("Feature Importance Rankings")
                     
                     col_leg1, col_leg2 = st.columns(2)
                     with col_leg1:
@@ -1197,7 +1197,7 @@ def main():
                         if highly_predictive_selected:
                             st.success(f"**Your selection includes top predictors:** {', '.join([m.replace('_', ' ').title() for m in highly_predictive_selected])}")
                     
-                    st.subheader("📋 Complete Feature Importance Table")
+                    st.subheader("Complete Feature Importance Table")
                     display_table = importances.copy()
                     display_table['rank'] = range(1, len(display_table) + 1)
                     display_table['is_selected'] = display_table['metric'].isin(selected_metrics)
@@ -1267,7 +1267,7 @@ def main():
                 st.divider()
                 
                 # Season Trend with Moving Average
-                st.subheader(f"📈 Season Trend with {moving_avg_window}-Game Moving Average")
+                st.subheader(f"Season Trend with {moving_avg_window}-Game Moving Average")
                 
                 if selected_season == 'All':
                     # Show all seasons
